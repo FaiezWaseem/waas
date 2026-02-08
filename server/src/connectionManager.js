@@ -76,6 +76,42 @@ class ConnectionManager {
     return { id, status: 'init', qr: null }
   }
 
+  async deleteSession(id) {
+    // 1. Close socket if exists
+    const s = this.sessions.get(id)
+    if (s && s.sock) {
+      try {
+        s.sock.end(undefined)
+      } catch (e) {
+        console.error(`Error closing socket for session ${id}`, e)
+      }
+    }
+    this.sessions.delete(id)
+
+    // 2. Delete from DB
+    try {
+      const db = require('./db')
+      await db.pool.query('DELETE FROM sessions WHERE id=$1', [id])
+    } catch (e) {
+      console.error(`Error deleting session ${id} from DB`, e)
+      throw e
+    }
+
+    // 3. Delete file system folder
+    const fs = require('fs')
+    const path = require('path')
+    const sessionDir = path.resolve(__dirname, `../sessions/${id}`)
+    if (fs.existsSync(sessionDir)) {
+      try {
+        fs.rmSync(sessionDir, { recursive: true, force: true })
+      } catch (e) {
+        console.error(`Error deleting session directory ${sessionDir}`, e)
+      }
+    }
+
+    return true
+  }
+
   async restoreSessions() {
     try {
         const db = require('./db')

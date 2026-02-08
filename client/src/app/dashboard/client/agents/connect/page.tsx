@@ -10,22 +10,22 @@ import { io } from "socket.io-client";
 
 const models = [
   {
-    id: "gpt-4-turbo",
-    name: "GPT-4 Turbo",
+    id: "openai",
+    name: "GPT-5 Mini",
     provider: "OpenAI",
     description: "Most capable model for complex tasks",
     icon: Sparkles
   },
   {
-    id: "claude-3-opus",
-    name: "Claude 3 Opus",
-    provider: "Anthropic",
-    description: "Excel at reasoning and coding",
+    id: "openai-fast",
+    name: "GPT-5 Nano",
+    provider: "OpenAI",
+    description: "Fast and efficient for general tasks",
     icon: Brain
   },
   {
-    id: "gemini-pro",
-    name: "Gemini Pro",
+    id: "gemini-fast",
+    name: "Gemini Flash 2.5",
     provider: "Google",
     description: "Fast and efficient for general tasks",
     icon: Zap

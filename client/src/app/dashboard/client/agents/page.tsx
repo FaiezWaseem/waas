@@ -87,7 +87,7 @@ export default function AgentsPage() {
       setIsLoading(false);
     }
   };
-  
+
   const handleSave = async () => {
     setIsSaving(true);
     // Simulate API call
@@ -128,80 +128,78 @@ export default function AgentsPage() {
             Connect New Number
           </button>
         </div>
-        
+
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="flex justify-center p-8">
               <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
             </div>
           ) : sessions.length === 0 ? (
-             <div className="flex flex-col items-center justify-center p-8 text-zinc-500">
-                <p>No active sessions found.</p>
-                <button
-                  onClick={handleOpenConnectPage}
-                  className="mt-4 text-indigo-600 hover:underline"
-                >
-                  Connect your first number
-                </button>
-             </div>
+            <div className="flex flex-col items-center justify-center p-8 text-zinc-500">
+              <p>No active sessions found.</p>
+              <button
+                onClick={handleOpenConnectPage}
+                className="mt-4 text-indigo-600 hover:underline"
+              >
+                Connect your first number
+              </button>
+            </div>
           ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="bg-zinc-50/50 text-zinc-500 dark:bg-zinc-800/50">
-                <th className="px-6 py-3 font-medium">Session ID / Agent</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium">Created At</th>
-                <th className="px-6 py-3 font-medium">Platform</th>
-                <th className="px-6 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {sessions.map((session) => (
-                <tr key={session.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                  <td className="px-6 py-4 font-medium">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30">
-                        <Phone className="h-4 w-4" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span>{session.id.slice(0, 8)}...</span>
-                        <span className="text-xs text-zinc-500">{session.agent_name || "No Agent"}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      session.status === "open" || session.status === "active"
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                        : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                    }`}>
-                      <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
-                        session.status === "open" || session.status === "active" ? "bg-green-500" : "bg-zinc-400"
-                      }`} />
-                      {/* {(session.status || "unknown")?.toUpperCase()} */}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5" />
-                      {new Date(session.created_at).toLocaleDateString()}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
-                    WhatsApp
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => router.push(`/dashboard/client/agents/${session.id}`)}
-                      className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800 transition-colors"
-                    >
-                      Manage
-                    </button>
-                  </td>
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="bg-zinc-50/50 text-zinc-500 dark:bg-zinc-800/50">
+                  <th className="px-6 py-3 font-medium">Session ID / Agent</th>
+                  <th className="px-6 py-3 font-medium">Status</th>
+                  <th className="px-6 py-3 font-medium">Created At</th>
+                  <th className="px-6 py-3 font-medium">Platform</th>
+                  <th className="px-6 py-3 font-medium text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {sessions.map((session) => (
+                  <tr key={session.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <td className="px-6 py-4 font-medium">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30">
+                          <Phone className="h-4 w-4" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span>{session.id.slice(0, 8)}...</span>
+                          <span className="text-xs text-zinc-500">{session.agent_name || "No Agent"}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${session.status === "open" || session.status === "active"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                        }`}>
+                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${session.status === "open" || session.status === "active" ? "bg-green-500" : "bg-zinc-400"
+                          }`} />
+                        {(session.status.status || "unknown")}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5" />
+                        {new Date(session.created_at).toLocaleString()}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
+                      WhatsApp
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => router.push(`/dashboard/client/agents/${session.id}`)}
+                        className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        Manage
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </motion.div>
