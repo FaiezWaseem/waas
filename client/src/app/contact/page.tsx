@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, MessageSquare, Phone, MapPin, Send, CheckCircle, Loader2 } from "lucide-react";
+import { Navbar } from "@/components/marketing/Navbar";
+import { Footer } from "@/components/marketing/Footer";
 
 export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -20,19 +22,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-zinc-50">
-      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-black/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="mx-auto max-w-7xl px-6 h-16 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-bold">W</div>
-            <span className="text-xl font-bold tracking-tight">WaaS</span>
-            </Link>
-            <nav className="flex items-center gap-6 text-sm font-medium">
-                <Link href="/" className="text-zinc-600 hover:text-indigo-600 dark:text-zinc-400">Home</Link>
-                <Link href="/blog" className="text-zinc-600 hover:text-indigo-600 dark:text-zinc-400">Blog</Link>
-                <Link href="/contact" className="text-indigo-600">Contact</Link>
-            </nav>
-        </div>
-      </header>
+      <Navbar />
 
       <main className="mx-auto max-w-7xl px-6 py-24">
         <div className="grid lg:grid-cols-2 gap-16">
@@ -192,6 +182,8 @@ export default function ContactPage() {
             </motion.div>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }

@@ -11,15 +11,13 @@ import {
   BarChart3, 
   Code2, 
   Check, 
-  ArrowRight,
-  Menu,
-  X
+  ArrowRight
 } from "lucide-react";
-import { useState } from "react";
+
+import { Navbar } from "@/components/marketing/Navbar";
+import { Footer } from "@/components/marketing/Footer";
 
 export default function Home() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   const fadeIn = {
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
@@ -28,55 +26,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 selection:bg-indigo-100 dark:bg-black dark:text-zinc-50 dark:selection:bg-indigo-900/30">
-      {/* Navigation */}
-      <header className="sticky top-0 z-50 w-full border-b border-zinc-200/50 bg-white/80 backdrop-blur-md dark:border-zinc-800/50 dark:bg-black/80">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-bold shadow-lg shadow-indigo-500/20">
-              W
-            </div>
-            <span className="text-xl font-bold tracking-tight">WaaS</span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-            <Link href="#features" className="text-zinc-600 transition hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400">Features</Link>
-            <Link href="#how-it-works" className="text-zinc-600 transition hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400">How it Works</Link>
-            <Link href="#pricing" className="text-zinc-600 transition hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400">Pricing</Link>
-            <Link href="#faq" className="text-zinc-600 transition hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400">FAQ</Link>
-          </nav>
-
-          <div className="hidden md:flex items-center gap-4">
-            <Link href="/login" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
-              Log in
-            </Link>
-            <Link 
-              href="/register" 
-              className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-            >
-              Get Started
-            </Link>
-          </div>
-
-          <button 
-            className="md:hidden p-2 text-zinc-600 dark:text-zinc-400"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-
-        {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="border-b border-zinc-200 bg-white px-6 py-4 md:hidden dark:border-zinc-800 dark:bg-zinc-900">
-            <nav className="flex flex-col gap-4">
-              <Link href="#features" onClick={() => setMobileMenuOpen(false)} className="text-sm font-medium">Features</Link>
-              <Link href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-sm font-medium">Pricing</Link>
-              <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="text-sm font-medium">Log in</Link>
-              <Link href="/register" onClick={() => setMobileMenuOpen(false)} className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Get Started</Link>
-            </nav>
-          </div>
-        )}
-      </header>
+      <Navbar />
 
       <main>
         {/* Hero Section */}
@@ -346,51 +296,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-zinc-200 bg-white pt-16 pb-8 dark:border-zinc-800 dark:bg-black">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="grid gap-12 md:grid-cols-4">
-            <div className="col-span-1 md:col-span-2">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold">W</div>
-                <span className="text-xl font-bold">WaaS</span>
-              </div>
-              <p className="max-w-xs text-sm text-zinc-600 dark:text-zinc-400">
-                The modern infrastructure for WhatsApp automation. Built for developers, by developers.
-              </p>
-            </div>
-            
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Product</h3>
-              <ul className="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-                <li><Link href="#features" className="hover:text-indigo-600">Features</Link></li>
-                <li><Link href="#pricing" className="hover:text-indigo-600">Pricing</Link></li>
-                <li><Link href="#docs" className="hover:text-indigo-600">Documentation</Link></li>
-                <li><Link href="/changelog" className="hover:text-indigo-600">Changelog</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Company</h3>
-              <ul className="mt-4 space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-                <li><Link href="/about" className="hover:text-indigo-600">About</Link></li>
-                <li><Link href="/blog" className="hover:text-indigo-600">Blog</Link></li>
-                <li><Link href="/careers" className="hover:text-indigo-600">Careers</Link></li>
-                <li><Link href="/contact" className="hover:text-indigo-600">Contact</Link></li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-zinc-100 pt-8 md:flex-row dark:border-zinc-800">
-            <p className="text-sm text-zinc-500">
-              © {new Date().getFullYear()} WaaS Inc. All rights reserved.
-            </p>
-            <div className="flex gap-6 text-sm text-zinc-500">
-              <Link href="/privacy" className="hover:text-zinc-900 dark:hover:text-white">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-zinc-900 dark:hover:text-white">Terms of Service</Link>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

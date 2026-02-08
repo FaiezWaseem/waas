@@ -1,113 +1,178 @@
 "use client";
 
-import Link from "next/link";
+import React from "react";
 import { motion } from "framer-motion";
-import { Users, Globe, Award, Heart } from "lucide-react";
+import { Users, Target, Heart, Globe, Award, Zap } from "lucide-react";
+import { Navbar } from "@/components/marketing/Navbar";
+import { Footer } from "@/components/marketing/Footer";
+
+const team = [
+  {
+    name: "Faiez",
+    role: "Founder & CEO",
+    image: "/avatars/faiez.png", // Placeholder
+    bio: "Full-stack developer with a passion for automation and scalable systems."
+  },
+  {
+    name: "Sarah Johnson",
+    role: "Head of Product",
+    image: "/avatars/sarah.png",
+    bio: "Ex-Google PM focused on building intuitive and user-centric products."
+  },
+  {
+    name: "David Chen",
+    role: "Lead Engineer",
+    image: "/avatars/david.png",
+    bio: "Rust enthusiast and distributed systems expert ensuring 99.99% uptime."
+  },
+  {
+    name: "Emily Davis",
+    role: "Customer Success",
+    image: "/avatars/emily.png",
+    bio: "Dedicated to helping our customers succeed and grow their businesses."
+  }
+];
+
+const values = [
+  {
+    icon: Target,
+    title: "Customer First",
+    description: "We build what you need, not what we think is cool. Your success is our success."
+  },
+  {
+    icon: Zap,
+    title: "Speed & Reliability",
+    description: "In the world of messaging, every millisecond counts. We optimize for speed."
+  },
+  {
+    icon: Heart,
+    title: "Transparency",
+    description: "No hidden fees, no dark patterns. We believe in honest and open business."
+  },
+  {
+    icon: Globe,
+    title: "Global Scale",
+    description: "Built to handle millions of messages across borders without breaking a sweat."
+  }
+];
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-zinc-50">
-      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-black/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="mx-auto max-w-7xl px-6 h-16 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-600 text-white font-bold">W</div>
-            <span className="text-xl font-bold tracking-tight">WaaS</span>
-            </Link>
-            <nav className="flex items-center gap-6 text-sm font-medium">
-                <Link href="/" className="text-zinc-600 hover:text-indigo-600 dark:text-zinc-400">Home</Link>
-                <Link href="/blog" className="text-zinc-600 hover:text-indigo-600 dark:text-zinc-400">Blog</Link>
-                <Link href="/contact" className="text-zinc-600 hover:text-indigo-600 dark:text-zinc-400">Contact</Link>
-            </nav>
-        </div>
-      </header>
+      <Navbar />
 
-      <main className="mx-auto max-w-7xl px-6 py-24">
-        {/* Hero */}
-        <div className="max-w-3xl mx-auto text-center mb-24">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
+      <main>
+        {/* Hero Section */}
+        <section className="relative overflow-hidden py-24 lg:py-32">
+          <div className="absolute top-0 left-1/2 -z-10 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-indigo-500/10 blur-[100px] dark:bg-indigo-500/20"></div>
+          <div className="mx-auto max-w-7xl px-6 text-center">
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-4xl font-extrabold tracking-tight sm:text-6xl mb-6"
             >
-                <h1 className="text-4xl font-bold tracking-tight sm:text-6xl mb-6">
-                    We're building the future of messaging
-                </h1>
-                <p className="text-xl text-zinc-600 dark:text-zinc-400">
-                    WaaS is on a mission to democratize WhatsApp automation for businesses of all sizes.
-                </p>
-            </motion.div>
-        </div>
+              We're on a mission to <br/>
+              <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">simplify communication</span>
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="mx-auto max-w-2xl text-lg text-zinc-600 dark:text-zinc-400"
+            >
+              WaaS was born out of frustration with complex and expensive WhatsApp APIs. We believe every business, small or large, deserves access to powerful automation tools.
+            </motion.p>
+          </div>
+        </section>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-24 border-y border-zinc-100 dark:border-zinc-900 py-12">
-            {[
-                { label: "Active Users", value: "10,000+" },
-                { label: "Messages Sent", value: "50M+" },
-                { label: "Countries", value: "120+" },
-                { label: "Uptime", value: "99.9%" }
-            ].map((stat, i) => (
-                <motion.div 
-                    key={stat.label}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.1 }}
-                    className="text-center"
-                >
-                    <div className="text-3xl font-bold text-indigo-600 mb-1">{stat.value}</div>
-                    <div className="text-sm font-medium text-zinc-500">{stat.label}</div>
-                </motion.div>
-            ))}
-        </div>
-
-        {/* Story */}
-        <div className="grid md:grid-cols-2 gap-16 items-center mb-24">
-            <div>
-                <h2 className="text-3xl font-bold mb-6">Our Story</h2>
-                <div className="space-y-4 text-zinc-600 dark:text-zinc-400 text-lg">
-                    <p>
-                        It all started in 2024 when we realized that existing WhatsApp solutions were either too expensive or too complex for small businesses.
-                    </p>
-                    <p>
-                        We wanted to build something different: a self-hosted, privacy-focused solution that gives developers full control over their data and infrastructure.
-                    </p>
-                    <p>
-                        Today, WaaS powers communication for thousands of companies worldwide, from local startups to enterprise organizations.
-                    </p>
+        {/* Stats Section */}
+        <section className="border-y border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 py-12">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="grid grid-cols-2 gap-8 md:grid-cols-4 text-center">
+              {[
+                { label: "Messages Sent", value: "10M+" },
+                { label: "Active Users", value: "2,000+" },
+                { label: "Uptime", value: "99.99%" },
+                { label: "Countries", value: "50+" },
+              ].map((stat, i) => (
+                <div key={i}>
+                  <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{stat.value}</div>
+                  <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mt-1">{stat.label}</div>
                 </div>
+              ))}
             </div>
-            <div className="bg-zinc-100 dark:bg-zinc-900 rounded-3xl aspect-square flex items-center justify-center">
-                <span className="text-zinc-400 dark:text-zinc-600 font-bold text-2xl">Team Photo Placeholder</span>
-            </div>
-        </div>
+          </div>
+        </section>
 
-        {/* Values */}
-        <div className="mb-24">
-            <h2 className="text-3xl font-bold mb-12 text-center">Our Values</h2>
-            <div className="grid md:grid-cols-3 gap-8">
-                {[
-                    { icon: <Users />, title: "Customer First", desc: "We build for you. Your feedback drives our roadmap." },
-                    { icon: <Award />, title: "Quality Code", desc: "We take pride in writing clean, efficient, and reliable software." },
-                    { icon: <Heart />, title: "Open & Honest", desc: "Transparency is at the core of everything we do." }
-                ].map((val, i) => (
-                    <motion.div 
-                        key={val.title}
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: i * 0.1 }}
-                        className="bg-zinc-50 dark:bg-zinc-900 p-8 rounded-2xl"
-                    >
-                        <div className="h-12 w-12 rounded-xl bg-white dark:bg-black flex items-center justify-center text-indigo-600 shadow-sm mb-6">
-                            {val.icon}
-                        </div>
-                        <h3 className="text-xl font-bold mb-3">{val.title}</h3>
-                        <p className="text-zinc-600 dark:text-zinc-400">{val.desc}</p>
-                    </motion.div>
-                ))}
+        {/* Values Section */}
+        <section className="py-24">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">Our Values</h2>
+              <p className="text-lg text-zinc-600 dark:text-zinc-400">The principles that guide everything we do.</p>
             </div>
-        </div>
+            
+            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+              {values.map((value, i) => (
+                <motion.div 
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className="bg-zinc-50 dark:bg-zinc-900 p-8 rounded-2xl border border-zinc-100 dark:border-zinc-800 hover:shadow-lg transition-shadow"
+                >
+                  <div className="h-12 w-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-6">
+                    <value.icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-3">{value.title}</h3>
+                  <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed">
+                    {value.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Team Section */}
+        <section className="py-24 bg-zinc-50 dark:bg-zinc-900/30">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">Meet the Team</h2>
+              <p className="text-lg text-zinc-600 dark:text-zinc-400">The people behind the platform.</p>
+            </div>
+
+            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+              {team.map((member, i) => (
+                <motion.div 
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className="group relative overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                >
+                  <div className="aspect-square bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+                     {/* Placeholder for real images */}
+                     <Users className="h-20 w-20 opacity-20" />
+                  </div>
+                  <div className="p-6">
+                    <h3 className="font-bold text-lg">{member.name}</h3>
+                    <p className="text-indigo-600 text-sm font-medium mb-3">{member.role}</p>
+                    <p className="text-zinc-600 dark:text-zinc-400 text-sm">
+                      {member.bio}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
       </main>
+
+      <Footer />
     </div>
   );
 }
