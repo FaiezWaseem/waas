@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -8,7 +8,19 @@ import { cn } from "@/lib/utils";
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const pathname = usePathname();
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        setUser(JSON.parse(userStr));
+      } catch (e) {
+        console.error("Failed to parse user", e);
+      }
+    }
+  }, []);
 
   const navLinks = [
     { name: "Features", href: "/#features" },
@@ -45,18 +57,29 @@ export function Navbar() {
         </nav>
 
         <div className="hidden md:flex items-center gap-4">
-          <Link
-            href="/login"
-            className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/register"
-            className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-          >
-            Get Started
-          </Link>
+          {user ? (
+            <Link
+              href={user.role === 'admin' ? "/dashboard/admin" : "/dashboard/client"}
+              className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/register"
+                className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+              >
+                Get Started
+              </Link>
+            </>
+          )}
         </div>
 
         <button
@@ -81,20 +104,32 @@ export function Navbar() {
                 {link.name}
               </Link>
             ))}
-            <Link
-              href="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-sm font-medium text-zinc-600 dark:text-zinc-400"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/register"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-sm font-medium text-indigo-600 dark:text-indigo-400"
-            >
-              Get Started
-            </Link>
+            {user ? (
+               <Link
+                href={user.role === 'admin' ? "/dashboard/admin" : "/dashboard/client"}
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-sm font-medium text-indigo-600 dark:text-indigo-400"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-sm font-medium text-zinc-600 dark:text-zinc-400"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-sm font-medium text-indigo-600 dark:text-indigo-400"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       )}

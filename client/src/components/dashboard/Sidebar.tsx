@@ -2,8 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import api from "@/lib/api";
 import {
   LayoutDashboard,
   Users,
@@ -28,6 +29,18 @@ interface SidebarProps {
 
 export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    try {
+      await api.post('/auth/logout');
+    } catch (e) {
+      console.error("Logout error", e);
+    } finally {
+      localStorage.removeItem('user');
+      router.push('/login');
+    }
+  }
 
   const adminLinks = [
     { href: "/dashboard/admin", label: "Overview", icon: LayoutDashboard },
@@ -127,7 +140,10 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
                         {role === 'admin' ? 'admin@waas.local' : 'john@example.com'}
                     </p>
                 </div>
-                <button className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
+                <button 
+                  onClick={handleLogout}
+                  className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                >
                     <LogOut className="h-5 w-5" />
                 </button>
              </div>

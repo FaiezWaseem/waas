@@ -22,15 +22,24 @@ export default function LoginPage() {
 
     // Call backend auth API
     try {
+      // Calls Next.js API route /api/auth/login
       const response = await api.post('/auth/login', { email, password });
       
       console.log("login success", response.data);
-      if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
+      
+      // Token is now in HTTP-only cookie, not in response body
+      if (response.data.user) {
+        // Store user info for UI display
         localStorage.setItem('user', JSON.stringify(response.data.user));
-        router.push('/dashboard');
+        
+        // Redirect based on role
+        if (response.data.user.role === 'admin') {
+          router.push('/dashboard/admin');
+        } else {
+          router.push('/dashboard/client');
+        }
       } else {
-         setError("Login failed: No token received");
+         setError("Login failed: No user data received");
       }
     } catch (err: any) {
       console.error(err);
