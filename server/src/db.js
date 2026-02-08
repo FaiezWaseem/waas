@@ -15,6 +15,13 @@ db.pragma('foreign_keys = ON')
 const pool = {
   query: async (sql, params = []) => {
     sql = sql.trim()
+    // handle $n postgres-style parameters by converting array to object with numeric keys
+    if (Array.isArray(params) && /\$\d/.test(sql)) {
+      const obj = {}
+      params.forEach((v, i) => { obj[String(i + 1)] = v })
+      params = obj
+    }
+
     try {
       if (/^SELECT|PRAGMA/i.test(sql)) {
         const stmt = db.prepare(sql)
