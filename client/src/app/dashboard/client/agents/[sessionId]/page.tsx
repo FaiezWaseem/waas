@@ -34,49 +34,29 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const models = [
   {
-    id: "gpt-4-turbo",
-    name: "GPT-4 Turbo",
+    id: "openai",
+    name: "GPT-5 Mini",
     provider: "OpenAI",
     description: "Most capable model for complex tasks",
     icon: Sparkles
   },
   {
-    id: "gpt-3.5-turbo",
-    name: "GPT-3.5 Turbo",
+    id: "openai-fast",
+    name: "GPT-5 Nano",
     provider: "OpenAI",
-    description: "Fast and cost-effective",
-    icon: Zap
+    description: "Fast and efficient for general tasks",
+    icon: Brain
   },
   {
-    id: "claude-3-opus",
-    name: "Claude 3 Opus",
-    provider: "Anthropic",
-    description: "Excel at reasoning and coding",
-    icon: Brain
+    id: "gemini-fast",
+    name: "Gemini Flash 2.5",
+    provider: "Google",
+    description: "Fast and efficient for general tasks",
+    icon: Zap
   }
 ];
 
-// Mock Chat Data
-const mockContacts = [
-  { id: "1", name: "Alice Smith", lastMessage: "Hey, can you help me with my order?", time: "10:30 AM", unreadCount: 2, status: "online" },
-  { id: "2", name: "Bob Johnson", lastMessage: "Thanks for the info!", time: "Yesterday", unreadCount: 0, status: "offline" },
-  { id: "3", name: "Marketing Group", lastMessage: "Meeting at 3 PM", time: "Yesterday", unreadCount: 5, status: "online" },
-  { id: "4", name: "Sarah Wilson", lastMessage: "Is the pricing negotiable?", time: "Tue", unreadCount: 0, status: "online" },
-  { id: "5", name: "Tech Support", lastMessage: "Your ticket #1234 has been resolved", time: "Mon", unreadCount: 0, status: "offline" },
-];
 
-const mockMessages: Record<string, any[]> = {
-  "1": [
-    { id: "1", text: "Hi there! I'm interested in your premium plan.", sender: "them", time: "10:25 AM", status: "read" },
-    { id: "2", text: "Hello! I'd be happy to help you with that. What specific features are you looking for?", sender: "me", time: "10:26 AM", status: "read" },
-    { id: "3", text: "I need API access and priority support.", sender: "them", time: "10:28 AM", status: "read" },
-    { id: "4", text: "Our Premium plan includes both! It starts at $99/month.", sender: "me", time: "10:29 AM", status: "delivered" },
-    { id: "5", text: "Hey, can you help me with my order?", sender: "them", time: "10:30 AM", status: "sent" },
-  ],
-  "2": [
-    { id: "1", text: "Thanks for the info!", sender: "them", time: "Yesterday", status: "read" }
-  ]
-};
 
 interface SessionConfig {
   isEnabled: boolean;
@@ -103,6 +83,8 @@ export default function SessionDetailsPage() {
   const params = useParams();
   const sessionId = params.sessionId as string;
   
+  const [chats, setChats] = useState<any[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'chats'>('overview');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -132,7 +114,32 @@ export default function SessionDetailsPage() {
 
   useEffect(() => {
     fetchSessionData();
+    fetchChats();
   }, [sessionId]);
+
+  useEffect(() => {
+    if (selectedChatId) {
+      fetchMessages(selectedChatId);
+    }
+  }, [selectedChatId]);
+
+  const fetchChats = async () => {
+    try {
+      const res = await api.get(`/sessions/${sessionId}/chats`);
+      setChats(res.data.chats);
+    } catch (e) {
+      console.error("Failed to fetch chats", e);
+    }
+  };
+
+  const fetchMessages = async (chatId: string) => {
+    try {
+      const res = await api.get(`/sessions/${sessionId}/chats/${chatId}/messages`);
+      setMessages(res.data.messages);
+    } catch (e) {
+      console.error("Failed to fetch messages", e);
+    }
+  };
 
   const fetchSessionData = async () => {
     try {
@@ -183,7 +190,7 @@ export default function SessionDetailsPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [selectedChatId, mockMessages]);
+  }, [selectedChatId]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -227,8 +234,21 @@ export default function SessionDetailsPage() {
     setMessageInput("");
   };
 
-  const selectedContact = mockContacts.find(c => c.id === selectedChatId);
-  const currentMessages = selectedChatId ? (mockMessages[selectedChatId] || []) : [];
+  const calculateUptime = (startDate: string) => {
+    if (!startDate || startDate === "-") return "-";
+    const start = new Date(startDate);
+    const now = new Date();
+    const diff = now.getTime() - start.getTime();
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    if (days > 0) return `${days}d ${hours}h`;
+    return `${hours}h`;
+  };
+
+  const selectedContact = chats.find(c => c.id === selectedChatId);
+  const currentMessages = messages;
 
   if (isLoading) {
     return (
@@ -381,7 +401,9 @@ export default function SessionDetailsPage() {
                           <History className="h-4 w-4" />
                           <span className="text-xs">Uptime</span>
                         </div>
-                        <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">3d 12h</p>
+                        <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                          {session.status === 'active' ? calculateUptime(session.lastActive) : '-'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -531,7 +553,7 @@ export default function SessionDetailsPage() {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  {mockContacts.map((contact) => (
+                  {chats.map((contact) => (
                     <div 
                       key={contact.id}
                       onClick={() => setSelectedChatId(contact.id)}
@@ -541,7 +563,7 @@ export default function SessionDetailsPage() {
                     >
                       <div className="relative">
                         <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-lg font-medium dark:bg-indigo-900/30 dark:text-indigo-400">
-                          {contact.name.charAt(0)}
+                          {(contact.name || contact.id).charAt(0)}
                         </div>
                         {contact.status === 'online' && (
                           <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-white dark:border-zinc-900" />
@@ -549,11 +571,11 @@ export default function SessionDetailsPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-medium truncate text-zinc-900 dark:text-zinc-100">{contact.name}</h4>
+                          <h4 className="font-medium truncate text-zinc-900 dark:text-zinc-100">{contact.name || contact.id}</h4>
                           <span className={`text-xs ${
                             contact.unreadCount > 0 ? 'text-green-600 font-medium' : 'text-zinc-500'
                           }`}>
-                            {contact.time}
+                            {new Date(contact.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
@@ -617,7 +639,7 @@ export default function SessionDetailsPage() {
                             <p className="text-sm leading-relaxed">{msg.text}</p>
                             <div className="flex items-center justify-end gap-1 mt-1">
                               <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                                {msg.time}
+                                {new Date(msg.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                               </span>
                               {msg.sender === 'me' && (
                                 <span className={msg.status === 'read' ? 'text-blue-500' : 'text-zinc-400'}>

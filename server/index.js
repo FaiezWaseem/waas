@@ -203,9 +203,53 @@ app.get('/sessions/:id', auth.verifyToken, async (req, res) => {
       session.status = liveStatus.status
       session.qr = liveStatus.qr
     }
+    
+    // add dynamic fields
+    // messages count
+    const m = await db.pool.query('SELECT COUNT(*) as cnt FROM messages WHERE session_id=$1', [id])
+    session.messageCount = m.rows[0].cnt
+    
+    // ensure new fields are present even if null
+    session.device = session.device || 'Unknown'
+    session.batteryLevel = session.battery_level || 0
+    session.platform = session.platform || 'WhatsApp'
 
     res.json({ session })
   }catch(e){
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// get chats for a session
+app.get('/sessions/:id/chats', auth.verifyToken, async (req, res) => {
+  try {
+    const id = req.params.id
+    // verify ownership
+    const r = await db.pool.query('SELECT user_id FROM sessions WHERE id=$1', [id])
+    if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'not found' })
+    if (r.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    const chats = await manager.getChats(id)
+    res.json({ chats })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// get messages for a chat
+app.get('/sessions/:id/chats/:chatId/messages', auth.verifyToken, async (req, res) => {
+  try {
+    const { id, chatId } = req.params
+    // verify ownership
+    const r = await db.pool.query('SELECT user_id FROM sessions WHERE id=$1', [id])
+    if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'not found' })
+    if (r.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    const messages = await manager.getMessages(id, chatId)
+    res.json({ messages })
+  } catch (e) {
     console.error(e)
     res.status(500).json({ error: e.message })
   }

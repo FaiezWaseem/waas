@@ -157,6 +157,19 @@ class ConnectionManager {
 
       if (connection === 'open') {
         console.log(`✅ Session ${id} CONNECTED!`)
+        // Update session details (phone number, name)
+        try {
+           const user = sock.user
+           if (user) {
+             const phoneNumber = user.id.split(':')[0]
+             const name = user.name || user.notify || phoneNumber
+             const db = require('./db')
+             db.pool.query('UPDATE sessions SET phone_number=$1, contact_name=$2, status=$3, last_active=CURRENT_TIMESTAMP WHERE id=$4', 
+               [phoneNumber, name, 'active', id]).catch(console.error)
+           }
+        } catch (e) {
+          console.error(`Error updating session details for ${id}`, e)
+        }
       }
       const s = this.sessions.get(id) || { userId, agentId }
       if (qr) s.qr = qr
@@ -289,6 +302,74 @@ class ConnectionManager {
     })
 
     this.sessions.set(id, { sock, status: 'init', qr: null, userId, agentId: agentId || null })
+  }
+
+  async getChats(sessionId) {
+    try {
+      const db = require('./db')
+      // Get last message per chat to build the chat list
+      const sql = `
+        SELECT m.*, COUNT(m2.id) as unread_count 
+        FROM messages m
+        INNER JOIN (
+            SELECT to_jid, MAX(created_at) as max_created
+            FROM messages
+            WHERE session_id = $1
+            GROUP BY to_jid
+        ) grouped_m ON m.to_jid = grouped_m.to_jid AND m.created_at = grouped_m.max_created
+        LEFT JOIN messages m2 ON m2.session_id = m.session_id AND m2.to_jid = m.to_jid AND m2.direction = 'in' AND m2.created_at > (
+            SELECT COALESCE(MAX(created_at), 0) FROM messages WHERE session_id = m.session_id AND to_jid = m.to_jid AND direction = 'out'
+        )
+        WHERE m.session_id = $1
+        GROUP BY m.id
+        ORDER BY m.created_at DESC
+      `
+      // Note: The unread_count logic above is an approximation. 
+      // Simplified: Just get the last message. Unread count requires "read" status which we might not track perfectly yet.
+      
+      const simplifiedSql = `
+        SELECT m.to_jid, m.body, m.created_at, m.direction, m.to_jid as id, m.to_jid as name
+        FROM messages m
+        INNER JOIN (
+            SELECT to_jid, MAX(created_at) as max_created
+            FROM messages
+            WHERE session_id = $1
+            GROUP BY to_jid
+        ) grouped_m ON m.to_jid = grouped_m.to_jid AND m.created_at = grouped_m.max_created
+        WHERE m.session_id = $1
+        ORDER BY m.created_at DESC
+      `
+      
+      const { rows } = await db.pool.query(simplifiedSql, [sessionId])
+      return rows.map(r => ({
+        id: r.to_jid,
+        name: r.to_jid.split('@')[0], // simplistic name
+        lastMessage: r.body,
+        time: r.created_at,
+        unreadCount: 0, // TODO: implement read tracking
+        status: 'offline' // TODO: implement presence
+      }))
+    } catch (e) {
+      console.error('getChats failed', e)
+      return []
+    }
+  }
+
+  async getMessages(sessionId, chatId) {
+    try {
+      const db = require('./db')
+      const { rows } = await db.pool.query('SELECT * FROM messages WHERE session_id=$1 AND to_jid=$2 ORDER BY created_at ASC LIMIT 100', [sessionId, chatId])
+      return rows.map(r => ({
+        id: r.id,
+        text: r.body,
+        sender: r.direction === 'out' ? 'me' : 'them',
+        time: r.created_at,
+        status: 'read' // placeholder
+      }))
+    } catch (e) {
+      console.error('getMessages failed', e)
+      return []
+    }
   }
 
   getSessionStatus(id) {

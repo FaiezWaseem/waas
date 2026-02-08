@@ -210,6 +210,18 @@ async function init() {
     }
   }catch(e){ console.error('plans desc migration failed', e && e.message) }
 
+  // migration: add extra columns to sessions for dashboard details
+  try{
+    const info = db.prepare("PRAGMA table_info(sessions)").all()
+    const cols = info.map(c=>c.name)
+    if (!cols.includes('phone_number')) db.exec("ALTER TABLE sessions ADD COLUMN phone_number TEXT")
+    if (!cols.includes('contact_name')) db.exec("ALTER TABLE sessions ADD COLUMN contact_name TEXT")
+    if (!cols.includes('platform')) db.exec("ALTER TABLE sessions ADD COLUMN platform TEXT DEFAULT 'WhatsApp'")
+    if (!cols.includes('device')) db.exec("ALTER TABLE sessions ADD COLUMN device TEXT")
+    if (!cols.includes('battery_level')) db.exec("ALTER TABLE sessions ADD COLUMN battery_level INTEGER DEFAULT 0")
+    if (!cols.includes('last_active')) db.exec("ALTER TABLE sessions ADD COLUMN last_active DATETIME")
+  }catch(e){ console.error('sessions extra cols migration failed', e && e.message) }
+
   // seed plans (idempotent)
   try{
     const stmt = db.prepare("INSERT OR IGNORE INTO plans(id,name,max_sessions,max_agents,max_messages,max_chats,price_monthly) VALUES(?,?,?,?,?,?,?)")
