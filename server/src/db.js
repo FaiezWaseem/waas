@@ -164,6 +164,15 @@ async function init() {
     );
   `)
 
+  // migration: add agent_id to sessions if missing
+  try {
+    const info = db.prepare("PRAGMA table_info(sessions)").all()
+    const hasAgentId = info.some(c => c.name === 'agent_id')
+    if (!hasAgentId) {
+      db.exec("ALTER TABLE sessions ADD COLUMN agent_id TEXT REFERENCES agents(id) ON DELETE SET NULL")
+    }
+  } catch (e) { console.error('sessions agent_id migration failed', e && e.message) }
+
   // migration: add status to posts if missing
   try{
     const info = db.prepare("PRAGMA table_info(posts)").all()

@@ -1,9 +1,18 @@
 require('dotenv').config()
 const express = require('express')
+const http = require('http')
+const { Server } = require("socket.io")
 const cors = require('cors')
 const bodyParser = require('body-parser')
 
 const app = express()
+const server = http.createServer(app)
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+  }
+})
 app.use(cors({
   origin: '*', // Allow ALL origins
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -22,9 +31,14 @@ try{ require('./src/cron') }catch(e){ console.error('cron load failed', e && e.m
 
 const { ConnectionManagerInstance } = require('./src/connectionManager')
 const manager = ConnectionManagerInstance
+manager.initSocketIO(io)
 
 // init db
-db.init().catch(console.error)
+db.init().then(() => {
+  console.log('Database initialized')
+  // restore sessions
+  manager.restoreSessions().catch(console.error)
+}).catch(console.error)
 
 app.get('/health', (req, res) => res.json({ ok: true }))
 
@@ -36,6 +50,9 @@ app.use('/admin', auth.verifyToken, auth.requireRole('admin'), require('./src/ad
 
 // mount agents router (standard CRUD for agents)
 app.use('/agents', auth.verifyToken, require('./src/agents'))
+
+// client dashboard routes
+app.use('/client', auth.verifyToken, require('./src/client'))
 
 // legacy route (create agent) kept for compatibility - POST /agents
 app.post('/agents', auth.verifyToken, async (req,res)=>{
@@ -182,7 +199,12 @@ app.get('/sessions/:id', auth.verifyToken, async (req, res) => {
       if (a.rows && a.rows.length) session.agent_name = a.rows[0].name
     }
 
-    res.json({ session: { ...session, status: liveStatus || session.status } })
+    if (liveStatus) {
+      session.status = liveStatus.status
+      session.qr = liveStatus.qr
+    }
+
+    res.json({ session })
   }catch(e){
     console.error(e)
     res.status(500).json({ error: e.message })
@@ -217,8 +239,8 @@ app.patch('/me', auth.verifyToken, async (req, res) => {
 const port = Number(process.env.PORT) || 4000
 
 function startServer(p){
-  const server = app.listen(p, () => console.log('Waas server listening on', p))
-  server.on('error', (e)=>{
+  const srv = server.listen(p, () => console.log('Waas server listening on', p))
+  srv.on('error', (e)=>{
     if (e && e.code === 'EADDRINUSE'){
       console.warn(`Port ${p} in use, trying ${p+1}...`)
       setTimeout(()=>startServer(p+1),100)

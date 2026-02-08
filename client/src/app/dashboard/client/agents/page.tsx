@@ -178,7 +178,7 @@ export default function AgentsPage() {
                       <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
                         session.status === "open" || session.status === "active" ? "bg-green-500" : "bg-zinc-400"
                       }`} />
-                      {(session.status || "unknown").toUpperCase()}
+                      {/* {(session.status || "unknown")?.toUpperCase()} */}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">

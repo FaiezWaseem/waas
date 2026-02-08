@@ -6,6 +6,7 @@ import { QrCode, Loader2, ArrowLeft, Smartphone, CheckCircle2, Shield, MessageSq
 import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import api from "@/lib/api";
+import { io } from "socket.io-client";
 
 const models = [
   {
@@ -56,6 +57,38 @@ export default function ConnectAgentPage() {
     createSession();
   }, []);
 
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const socket = io("http://localhost:4000");
+
+    socket.on("connect", () => {
+      console.log("Connected to socket.io");
+      socket.emit("join_session", sessionId);
+    });
+
+    socket.on("qr", (data) => {
+      console.log("Received QR update", data);
+      if (data.sessionId === sessionId && data.qr) {
+        setQrCode(data.qr);
+      }
+    });
+
+    socket.on("status", (data) => {
+      console.log("Received status update", data);
+      if (data.sessionId === sessionId) {
+         if (data.status === 'open' || data.status === 'active') {
+            console.log("✅ Connection established!");
+            setStep('config');
+         }
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [sessionId]);
+
   const createSession = async () => {
     try {
       setIsConnecting(true);
@@ -63,8 +96,8 @@ export default function ConnectAgentPage() {
       setSessionId(res.data.id);
       if (res.data.qr) {
         setQrCode(res.data.qr);
-        pollStatus(res.data.id);
       }
+      // pollStatus(res.data.id); // Disabled in favor of WebSockets
     } catch (e) {
       console.error("Failed to create session", e);
     } finally {
@@ -72,11 +105,18 @@ export default function ConnectAgentPage() {
     }
   };
 
+  /*
   const pollStatus = (sid: string) => {
     const interval = setInterval(async () => {
       try {
         const res = await api.get(`/sessions/${sid}`);
-        if (res.data.status === 'open' || res.data.status === 'active') {
+        const s = res.data.session;
+        
+        if (s.qr) {
+          setQrCode(s.qr);
+        }
+
+        if (s.status === 'open' || s.status === 'active') {
           clearInterval(interval);
           setStep('config');
         }
@@ -85,6 +125,7 @@ export default function ConnectAgentPage() {
       }
     }, 2000);
   };
+  */
 
   const handleFinish = async () => {
     if (!sessionId) return;

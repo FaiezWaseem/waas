@@ -1,4 +1,3 @@
-const { default: makeWASocket, useMultiFileAuthState, Browsers } = require('@adiwajshing/baileys')
 const { Boom } = require('@hapi/boom')
 const { v4: uuidv4 } = require('uuid')
 
@@ -22,6 +21,18 @@ async function checkSessionLimit(userId){
 class ConnectionManager {
   constructor() {
     this.sessions = new Map() // id => { sock, status, qr, userId, agentId }
+    this.io = null
+  }
+
+  initSocketIO(io) {
+    this.io = io
+    this.io.on('connection', (socket) => {
+      console.log('Client connected to socket.io')
+      socket.on('join_session', (sessionId) => {
+        socket.join(`session:${sessionId}`)
+        console.log(`Socket joined session:${sessionId}`)
+      })
+    })
   }
 
   async createSession(userId, agentId){
@@ -49,20 +60,96 @@ class ConnectionManager {
 
 
     const id = uuidv4()
+    
+    // persist in db first
+    try{
+      const db = require('./db')
+      await db.pool.query('INSERT INTO sessions(id,user_id,agent_id,status,qr,auth_path) VALUES($1,$2,$3,$4,$5,$6)',[id,userId,agentId||null,'init',null,`./sessions/${id}`])
+    }catch(e){ 
+      console.error('db save failed',e.message) 
+      throw e
+    }
+
+    // init socket
+    await this._initSocket(id, userId, agentId)
+
+    return { id, status: 'init', qr: null }
+  }
+
+  async restoreSessions() {
+    try {
+        const db = require('./db')
+        const res = await db.pool.query("SELECT * FROM sessions")
+        for (const session of res.rows) {
+            // Only restore if we don't already have it in memory
+            if (!this.sessions.has(session.id)) {
+                console.log(`Restoring session ${session.id}`)
+                // We don't await this so they restore in parallel
+                this._initSocket(session.id, session.user_id, session.agent_id).catch(err => {
+                    console.error(`Failed to restore session ${session.id}:`, err)
+                })
+            }
+        }
+    } catch (e) {
+        console.error('Restore sessions failed', e)
+    }
+  }
+
+  async _initSocket(id, userId, agentId) {
+    const { default: makeWASocket, useMultiFileAuthState, Browsers, DisconnectReason } = await import('@whiskeysockets/baileys')
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${id}`)
 
-    const sock = makeWASocket({ auth: state, browser: Browsers.macOS('Waas') })
+    const sock = makeWASocket({
+      auth: state,
+      browser: Browsers.ubuntu('Chrome'),
+      printQRInTerminal: false,
+      connectTimeoutMs: 60000,
+      retryRequestDelayMs: 2000,
+    })
 
     sock.ev.on('connection.update', (update) => {
       const { connection, lastDisconnect, qr } = update
-      const s = this.sessions.get(id) || {}
+      console.log(`Session ${id} update: connection=${connection}, qr=${qr ? 'YES' : 'NO'}`)
+
+      if (connection === 'close') {
+          const shouldReconnect = (lastDisconnect.error)?.output?.statusCode === DisconnectReason.restartRequired
+          console.log(`Session ${id} closed. Reconnect: ${shouldReconnect}`)
+          if (shouldReconnect) {
+             this._initSocket(id, userId, agentId)
+          }
+      }
+
+      if (connection === 'open') {
+        console.log(`✅ Session ${id} CONNECTED!`)
+      }
+      const s = this.sessions.get(id) || { userId, agentId }
       if (qr) s.qr = qr
       if (connection) s.status = connection
       if (lastDisconnect) s.lastDisconnect = lastDisconnect
+      // keep existing fields
+      s.userId = userId
+      s.agentId = agentId
+      
       this.sessions.set(id, s)
 
       // auto save
       saveCreds().catch(console.error)
+      
+      // update db status
+      if (connection) {
+         const db = require('./db')
+         db.pool.query('UPDATE sessions SET status=$1 WHERE id=$2', [connection, id]).catch(console.error)
+         if (this.io) {
+           this.io.to(`session:${id}`).emit('status', { sessionId: id, status: connection })
+         }
+      }
+      if (qr) {
+         const db = require('./db')
+         db.pool.query('UPDATE sessions SET qr=$1 WHERE id=$2', [qr, id]).catch(console.error)
+         if (this.io) {
+           this.io.to(`session:${id}`).emit('qr', { sessionId: id, qr })
+         }
+      }
     })
 
     sock.ev.on('messages.upsert', async (m) => {
@@ -88,23 +175,24 @@ class ConnectionManager {
         }catch(e){ console.error('persist message failed', e && e.message) }
 
         // find bound agent for this session
+        // use passed agentId or fetch fresh from DB/memory
         const s = this.sessions.get(id) || {}
-        const agentId = s.agentId
-        if (!agentId) return
+        const currentAgentId = s.agentId || agentId
+        if (!currentAgentId) return
 
         // enforce plan usage and track usage
         try{
           const db3 = require('./db')
-          const subRes = await db3.pool.query('SELECT s.id,s.plan_id,s.period_start,s.period_end,p.max_messages,p.max_chats FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[s.userId])
+          const subRes = await db3.pool.query('SELECT s.id,s.plan_id,s.period_start,s.period_end,p.max_messages,p.max_chats FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[userId])
           if (subRes.rows && subRes.rows.length){
             const subRow = subRes.rows[0]
             // ensure usage row
-            const uRes = await db3.pool.query('SELECT id,messages_count,chats_count,period_start FROM usage WHERE user_id=$1 AND period_start=$2',[s.userId,subRow.period_start])
+            const uRes = await db3.pool.query('SELECT id,messages_count,chats_count,period_start FROM usage WHERE user_id=$1 AND period_start=$2',[userId,subRow.period_start])
             let usageRow = uRes.rows && uRes.rows[0]
             if (!usageRow){
               const usageId = require('uuid').v4()
-              await db3.pool.query('INSERT INTO usage(id,user_id,period_start,period_end,messages_count,chats_count,created_at) VALUES($1,$2,$3,$4,0,0,CURRENT_TIMESTAMP)',[usageId,s.userId,subRow.period_start,subRow.period_end])
-              const newU = await db3.pool.query('SELECT id,messages_count,chats_count,period_start FROM usage WHERE user_id=$1 AND period_start=$2',[s.userId,subRow.period_start])
+              await db3.pool.query('INSERT INTO usage(id,user_id,period_start,period_end,messages_count,chats_count,created_at) VALUES($1,$2,$3,$4,0,0,CURRENT_TIMESTAMP)',[usageId,userId,subRow.period_start,subRow.period_end])
+              const newU = await db3.pool.query('SELECT id,messages_count,chats_count,period_start FROM usage WHERE user_id=$1 AND period_start=$2',[userId,subRow.period_start])
               usageRow = newU.rows && newU.rows[0]
             }
 
@@ -117,7 +205,7 @@ class ConnectionManager {
               console.error('user over messages quota, not replying')
               await db3.pool.query('UPDATE usage SET last_alerted_at=CURRENT_TIMESTAMP WHERE id=$1',[usageRow.id])
               // notify user via webhooks if registered
-              try{ const alerts = require('./alerts'); await alerts.notifyUser(s.userId,{ type:'quota_exceeded', kind:'messages', used, limit: subRow.max_messages }) }catch(e){ console.error('notify failed', e && e.message) }
+              try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'messages', used, limit: subRow.max_messages }) }catch(e){ console.error('notify failed', e && e.message) }
               return
             }
 
@@ -131,7 +219,7 @@ class ConnectionManager {
                 if (subRow.max_chats && chatsUsed > subRow.max_chats){
                   console.error('user over chats quota, not replying')
                   await db3.pool.query('UPDATE usage SET last_alerted_at=CURRENT_TIMESTAMP WHERE id=$1',[usageRow.id])
-                  try{ const alerts = require('./alerts'); await alerts.notifyUser(s.userId,{ type:'quota_exceeded', kind:'chats', used:chatsUsed, limit: subRow.max_chats }) }catch(e){ console.error('notify failed', e && e.message) }
+                  try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'chats', used:chatsUsed, limit: subRow.max_chats }) }catch(e){ console.error('notify failed', e && e.message) }
                   return
                 }
               }
@@ -141,7 +229,7 @@ class ConnectionManager {
 
         // load agent meta
         const db2 = require('./db')
-        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.model FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1',[agentId])
+        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.model FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1',[currentAgentId])
         if (!r.rows || !r.rows.length) return
         const meta = r.rows[0]
         const systemPrompt = meta.system_prompt || ''
@@ -165,14 +253,6 @@ class ConnectionManager {
     })
 
     this.sessions.set(id, { sock, status: 'init', qr: null, userId, agentId: agentId || null })
-
-    // persist in db if available
-    try{
-      const db = require('./db')
-      await db.pool.query('INSERT INTO sessions(id,user_id,agent_id,status,qr,auth_path) VALUES($1,$2,$3,$4,$5,$6)',[id,userId,agentId||null,'init',null,`./sessions/${id}`])
-    }catch(e){ console.error('db save failed',e.message) }
-
-    return { id, status: 'init', qr: null }
   }
 
   getSessionStatus(id) {

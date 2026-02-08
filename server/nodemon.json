@@ -1,0 +1,6 @@
+{
+  "watch": ["."],
+  "ext": "js,mjs,json",
+  "ignore": ["sessions/", "data/"],
+  "exec": "node index.js"
+}
