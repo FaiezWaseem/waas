@@ -14,7 +14,9 @@ import {
   Shield,
   LogOut,
   Menu,
-  X
+  X,
+  Bot,
+  BookOpen
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -31,14 +33,15 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
     { href: "/dashboard/admin", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/admin/users", label: "Users", icon: Users },
     { href: "/dashboard/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
+    { href: "/dashboard/admin/blogs", label: "Blogs", icon: BookOpen },
     { href: "/dashboard/admin/settings", label: "Settings", icon: Settings },
   ];
 
   const clientLinks = [
     { href: "/dashboard/client", label: "Overview", icon: LayoutDashboard },
-    { href: "/dashboard/client/messages", label: "Messages", icon: MessageSquare },
-    { href: "/dashboard/client/templates", label: "Templates", icon: FileText },
-    { href: "/dashboard/client/billing", label: "Billing", icon: CreditCard },
+    { href: "/dashboard/client/agents", label: "Agents", icon: Bot },
+    { href: "/dashboard/client/chats", label: "Chats", icon: MessageSquare },
+    { href: "/dashboard/client/subscription", label: "Upgrade Plans", icon: CreditCard },
     { href: "/dashboard/client/settings", label: "Settings", icon: Settings },
   ];
 
@@ -62,22 +65,15 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       {/* Sidebar Container */}
       <motion.aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 lg:static lg:block lg:!translate-x-0",
-          isOpen ? "block" : "hidden"
+          "fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 lg:static lg:block lg:!transform-none"
         )}
         initial={false}
-        animate={{ x: isOpen ? 0 : -256 }} // Simple logic: on mobile we might want slide-in. On desktop it's static.
-        // Actually, mixing fixed/static logic with motion can be tricky.
-        // Let's simplify: on mobile it's fixed slide-in. On desktop it's always visible static.
-        // We'll handle the responsive visibility via CSS classes mostly, and use motion for mobile transition.
+        animate={{ x: isOpen ? 0 : "-100%" }}
         variants={{
            open: { x: 0 },
            closed: { x: "-100%" }
         }}
         transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-        // Override for desktop to always show
-        style={{ transform: "none" }} // This might conflict with motion.
-        // Let's rely on CSS for desktop reset.
       >
         <div className="flex h-full flex-col">
           {/* Logo */}

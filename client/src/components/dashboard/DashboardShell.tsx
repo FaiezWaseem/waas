@@ -20,13 +20,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   return (
     <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* Mobile Sidebar (controlled by state) & Desktop Sidebar (always visible) */}
-      <div className={`fixed inset-y-0 z-50 lg:static ${isSidebarOpen ? 'block' : 'hidden lg:block'}`}>
-         <Sidebar role={role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      </div>
+      <Sidebar role={role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setIsSidebarOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+          {pathname}
           {children}
         </main>
       </div>
