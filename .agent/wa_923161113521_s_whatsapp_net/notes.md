@@ -1,0 +1,1 @@
+Tried to use gh to create repo but PAT lacks create repo scope. Logged in with token stored in /tmp/gh_token.txt. Need user to provide a token with repo creation permissions or create repository manually. Git remote push failed due to auth. Will ask user for guidance.
