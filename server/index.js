@@ -4,9 +4,37 @@ const http = require('http')
 const { Server } = require("socket.io")
 const cors = require('cors')
 const bodyParser = require('body-parser')
+const multer = require('multer')
+const path = require('path')
+const fs = require('fs')
 
 const app = express()
 const server = http.createServer(app)
+
+// ensure uploads dir
+const UPLOADS_DIR = path.join(__dirname, 'uploads')
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR)
+app.use('/uploads', express.static(UPLOADS_DIR))
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, UPLOADS_DIR)
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname)
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext)
+  }
+})
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true)
+    else cb(new Error('Only images are allowed'))
+  }
+})
+
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -303,7 +331,7 @@ app.patch('/sessions/:id', auth.verifyToken, async (req, res) => {
 // get user profile
 app.get('/me', auth.verifyToken, async (req, res) => {
   try {
-    const r = await db.pool.query('SELECT id, email, name, created_at FROM users WHERE id=$1', [req.user.sub])
+    const r = await db.pool.query('SELECT id, email, name, phone, avatar_url, created_at FROM users WHERE id=$1', [req.user.sub])
     if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'User not found' })
     res.json({ user: r.rows[0] })
   } catch (e) {
@@ -315,14 +343,42 @@ app.get('/me', auth.verifyToken, async (req, res) => {
 // update user profile
 app.patch('/me', auth.verifyToken, async (req, res) => {
   try {
-    const { name, email } = req.body
+    const { name, email, phone, avatar_url } = req.body
     if (name) await db.pool.query('UPDATE users SET name=$1 WHERE id=$2', [name, req.user.sub])
     if (email) await db.pool.query('UPDATE users SET email=$1 WHERE id=$2', [email, req.user.sub])
+    if (phone) await db.pool.query('UPDATE users SET phone=$1 WHERE id=$2', [phone, req.user.sub])
+    if (avatar_url) await db.pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatar_url, req.user.sub])
     res.json({ ok: true })
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: e.message })
   }
+})
+
+// upload avatar
+app.post('/me/avatar', auth.verifyToken, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+    // construct full url
+    const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`
+    await db.pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [url, req.user.sub])
+    res.json({ url })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Global error handler
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'File too large. Max size is 5MB.' })
+    }
+    return res.status(400).json({ error: err.message })
+  }
+  console.error(err)
+  res.status(500).json({ error: 'Internal Server Error' })
 })
 
 const port = Number(process.env.PORT) || 4000

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import api from "@/lib/api";
 import { 
   User, 
@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function UserSettingsPage() {
   const [activeTab, setActiveTab] = useState<'profile' | 'account' | 'notifications' | 'security'>('profile');
   const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // User Data
   const [user, setUser] = useState({
@@ -59,6 +60,8 @@ export default function UserSettingsPage() {
           ...prev, 
           name: res.data.user.name, 
           email: res.data.user.email,
+          phone: res.data.user.phone || "",
+          avatar: res.data.user.avatar_url || "https://github.com/shadcn.png",
           // created_at is available but not used in UI yet
         }));
       }
@@ -67,12 +70,32 @@ export default function UserSettingsPage() {
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      try {
+        const res = await api.post('/me/avatar', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        setUser(prev => ({ ...prev, avatar: res.data.url }));
+      } catch (error) {
+        console.error("Failed to upload avatar", error);
+      }
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
       await api.patch('/me', {
         name: user.name,
-        email: user.email
+        email: user.email,
+        phone: user.phone
       });
       // Optionally show success toast
     } catch (error) {
@@ -145,7 +168,7 @@ export default function UserSettingsPage() {
                   <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
                     <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-4">Profile Picture</h3>
                     <div className="flex items-center gap-6">
-                      <div className="relative">
+                      <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                         <img
                           src={user.avatar}
                           alt={user.name}
@@ -154,11 +177,26 @@ export default function UserSettingsPage() {
                         <button className="absolute bottom-0 right-0 p-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors">
                           <Camera className="h-4 w-4" />
                         </button>
+                        <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Camera className="h-8 w-8 text-white/80" />
+                        </div>
                       </div>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={handleFileChange}
+                      />
                       <div className="space-y-1">
-                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Upload new image</p>
+                        <button 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        >
+                          Upload new image
+                        </button>
                         <p className="text-xs text-zinc-500">
-                          JPG, GIF or PNG. Max size of 2MB.
+                          JPG, GIF or PNG. Max size of 5MB.
                         </p>
                       </div>
                     </div>

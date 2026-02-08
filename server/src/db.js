@@ -183,6 +183,24 @@ async function init() {
     }
   }catch(e){ console.error('posts status migration failed', e && e.message) }
 
+  // migration: add phone to users if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(users)").all()
+    const hasPhone = info.some(c=>c.name==='phone')
+    if (!hasPhone){
+      db.exec("ALTER TABLE users ADD COLUMN phone TEXT")
+    }
+  }catch(e){ console.error('users phone migration failed', e && e.message) }
+
+  // migration: add avatar_url to users if missing
+  try{
+    const info = db.prepare("PRAGMA table_info(users)").all()
+    const hasAvatar = info.some(c=>c.name==='avatar_url')
+    if (!hasAvatar){
+      db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT")
+    }
+  }catch(e){ console.error('users avatar migration failed', e && e.message) }
+
   // migration: add price_monthly to plans if missing
   try{
     const info = db.prepare("PRAGMA table_info(plans)").all()

@@ -21,27 +21,30 @@ async function proxy(request: Request, { params }: { params: { path: string[] } 
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  try {
-    const body = request.method !== "GET" && request.method !== "HEAD" 
-      ? await request.text() 
-      : undefined;
+  // Preserve Content-Type from original request (essential for multipart/form-data)
+  const contentType = request.headers.get("content-type");
+  if (contentType) {
+    headers["Content-Type"] = contentType;
+  }
 
+  try {
     const res = await fetch(targetUrl, {
       method: request.method,
       headers,
-      body,
+      body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
+      // @ts-ignore
+      duplex: "half", 
     });
 
     // Forward the response
-    const data = await res.text();
+    const data = await res.arrayBuffer();
     
-    // Try to parse JSON if possible to return JSON response
-    try {
-      const json = JSON.parse(data);
-      return NextResponse.json(json, { status: res.status });
-    } catch {
-      return new NextResponse(data, { status: res.status });
-    }
+    return new NextResponse(data, {
+      status: res.status,
+      headers: {
+        "Content-Type": res.headers.get("Content-Type") || "application/json",
+      }
+    });
   } catch (error) {
     console.error(`Proxy error for ${path}:`, error);
     return NextResponse.json(
