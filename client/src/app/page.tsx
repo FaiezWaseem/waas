@@ -1,65 +1,134 @@
+"use client";
+
 import Image from "next/image";
+import { motion } from "framer-motion";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="min-h-screen bg-gradient-to-b from-white via-zinc-50 to-zinc-100 dark:from-black dark:via-zinc-900 dark:to-zinc-950">
+      <header className="mx-auto max-w-7xl px-6 py-8">
+        <nav className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-500 shadow-lg flex items-center justify-center text-white font-bold">W</div>
+            <span className="font-semibold text-lg">WaaS</span>
+          </div>
+          <div className="hidden md:flex items-center gap-6 text-sm text-zinc-700 dark:text-zinc-300">
+            <a href="#features" className="hover:underline">Features</a>
+            <a href="#pricing" className="hover:underline">Pricing</a>
+            <a href="#docs" className="hover:underline">Docs</a>
+            <button className="rounded-full bg-black text-white px-4 py-2 text-sm">Get Started</button>
+          </div>
+        </nav>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-6 py-16">
+        <section className="grid grid-cols-1 gap-12 md:grid-cols-2 items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6 }}
+            className="flex flex-col gap-6"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <span className="inline-flex items-center rounded-full bg-indigo-100/60 px-3 py-1 text-sm font-medium text-indigo-700">New</span>
+            <h1 className="text-4xl font-extrabold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50">
+              Build powerful WhatsApp automation in minutes
+            </h1>
+            <p className="text-lg text-zinc-600 dark:text-zinc-400 max-w-xl">
+              WaaS provides easy-to-use tools and APIs to automate customer support, send alerts, and run campaigns — all powered by a secure self-hosted backend.
+            </p>
+
+            <div className="flex gap-4">
+              <motion.a
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
+                href="#"
+                className="rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg"
+              >
+                Get started — it's free
+              </motion.a>
+              <motion.a
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
+                href="#"
+                className="rounded-full border border-zinc-200 px-6 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                View docs
+              </motion.a>
+            </div>
+
+            <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">Trusted by 1,200+ teams worldwide</div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6 }}
+            className="relative flex items-center justify-center"
           >
-            Documentation
-          </a>
-        </div>
+            <div className="rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 w-full max-w-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-zinc-700 dark:text-zinc-200">WaaS • Live</div>
+                  <div className="mt-2 text-xl font-semibold text-zinc-900 dark:text-zinc-50">Order #12345</div>
+                </div>
+                <div className="text-sm text-zinc-500">2m ago</div>
+              </div>
+
+              <div className="mt-4 text-zinc-700 dark:text-zinc-300">
+                <div className="text-sm">Customer</div>
+                <div className="mt-1 text-md font-medium">Jane Doe</div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-sm text-zinc-600">Status</div>
+                <div className="text-sm font-medium text-green-600">Delivered</div>
+              </div>
+
+              <div className="mt-6 flex gap-3">
+                <button className="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Message</button>
+                <button className="flex-1 rounded-md border border-zinc-200 px-4 py-2 text-sm font-medium">Details</button>
+              </div>
+            </div>
+
+            <div className="absolute -right-12 -bottom-12 h-40 w-40 rounded-full bg-gradient-to-tr from-indigo-200 to-purple-300 opacity-70 blur-3xl"></div>
+          </motion.div>
+        </section>
+
+        <section id="features" className="mt-20">
+          <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Features</h2>
+          <p className="mt-2 text-zinc-600 dark:text-zinc-400 max-w-2xl">Everything you need to run WhatsApp automation — webhooks, templating, scheduling, and analytics.</p>
+
+          <div className="mt-8 grid gap-6 md:grid-cols-3">
+            {[
+              { title: "Webhooks", desc: "Real-time events pushed to your servers." },
+              { title: "Templates", desc: "Create and reuse message templates." },
+              { title: "Scheduling", desc: "Schedule messages and campaigns." },
+            ].map((f, i) => (
+              <motion.div
+                key={f.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 * i, duration: 0.5 }}
+                className="rounded-xl border border-zinc-100 bg-white p-6 shadow-sm dark:bg-zinc-900"
+              >
+                <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">{i + 1}</div>
+                <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">{f.title}</div>
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{f.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
       </main>
+
+      <footer className="mx-auto max-w-7xl px-6 py-12">
+        <div className="flex items-center justify-between border-t border-zinc-100 pt-6 text-sm text-zinc-600 dark:text-zinc-400">
+          <div>© {new Date().getFullYear()} WaaS — Built with ❤️</div>
+          <div className="flex items-center gap-4">
+            <a href="#docs" className="hover:underline">Docs</a>
+            <a href="#privacy" className="hover:underline">Privacy</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
