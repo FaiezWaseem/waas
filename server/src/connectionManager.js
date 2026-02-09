@@ -114,15 +114,43 @@ class ConnectionManager {
 
   async logoutSession(id) {
     const s = this.sessions.get(id)
+    let logoutSuccess = false
+
     if (s && s.sock) {
       try {
         await s.sock.logout()
+        logoutSuccess = true
       } catch (e) {
         console.error(`Error logging out session ${id}`, e)
-        throw e
       }
-    } else {
-        throw new Error('session not active or socket not ready')
+    }
+
+    // Force DB update immediately to avoid race condition with UI
+    console.log(`Session ${id} manual logout. Forcing init state...`)
+    try {
+        const db = require('./db')
+        await db.pool.query('UPDATE sessions SET status=$1, qr=$2, phone_number=$3, contact_name=$4 WHERE id=$5', 
+            ['init', null, null, null, id])
+        
+        if (s) {
+            s.status = 'init'
+            s.qr = null
+            this.sessions.set(id, s)
+
+            // If logout failed (no event triggered), manually restart
+            if (!logoutSuccess && s.userId) {
+                console.log(`Logout failed/skipped, manually restarting session ${id}...`)
+                const fs = require('fs')
+                const path = require('path')
+                const sessionDir = path.resolve(__dirname, `../sessions/${id}`)
+                if (fs.existsSync(sessionDir)) {
+                    fs.rmSync(sessionDir, { recursive: true, force: true })
+                }
+                this._initSocket(id, s.userId, s.agentId)
+            }
+        }
+    } catch(e) { 
+        console.error('logout reset failed', e) 
     }
   }
 
@@ -156,6 +184,8 @@ class ConnectionManager {
       connectTimeoutMs: 60000,
       retryRequestDelayMs: 2000,
     })
+
+    this.sessions.set(id, { sock, status: 'connecting', userId, agentId })
 
     sock.ev.on('connection.update', async(update) => {
       const { connection, lastDisconnect, qr } = update

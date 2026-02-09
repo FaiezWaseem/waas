@@ -3,8 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import api from "@/lib/api";
+
+import { io } from "socket.io-client";
+import { QRCodeSVG } from "qrcode.react";
 import { 
   ArrowLeft, 
+  QrCode,
   Save, 
   Phone, 
   MessageSquare, 
@@ -93,6 +97,8 @@ export default function SessionDetailsPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [showConnect, setShowConnect] = useState(false);
   const [messageInput, setMessageInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -120,6 +126,43 @@ export default function SessionDetailsPage() {
   useEffect(() => {
     fetchSessionData();
     fetchChats();
+    const interval = setInterval(fetchChats, 10000); // Poll chats every 10s
+
+    return () => clearInterval(interval);
+  }, [sessionId]);
+
+  // Socket.IO for real-time status and QR
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const socket = io("http://localhost:4000");
+
+    socket.on("connect", () => {
+      console.log("Connected to socket.io");
+      socket.emit("join_session", sessionId);
+    });
+
+    socket.on("qr", (data) => {
+      if (data.sessionId === sessionId && data.qr) {
+        setQrCode(data.qr);
+      }
+    });
+
+    socket.on("status", (data) => {
+      if (data.sessionId === sessionId) {
+        // @ts-ignore
+        setSession(prev => prev ? ({ ...prev, status: data.status }) : null);
+        if (data.status === 'open' || data.status === 'active') {
+          setQrCode(null);
+          setShowConnect(false);
+          fetchSessionData(); // refresh to get phone number etc
+        }
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, [sessionId]);
 
   useEffect(() => {
@@ -152,6 +195,10 @@ export default function SessionDetailsPage() {
       const res = await api.get(`/sessions/${sessionId}`);
       const s = res.data.session;
       console.log(s)
+
+      if (s.qr) {
+        setQrCode(s.qr);
+      }
       
       let agentConfig = {
         model: "openai",
@@ -281,6 +328,10 @@ export default function SessionDetailsPage() {
     }
   };
 
+  const handleConnect = () => {
+    setShowConnect(true);
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !selectedChatId) return;
@@ -329,6 +380,80 @@ export default function SessionDetailsPage() {
     );
   }
 
+  // Handle Init/Disconnected State
+  if (session.status === 'init' || showConnect) {
+    return (
+      <div className="h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800 p-8 text-center">
+            
+            {!showConnect ? (
+              <>
+                <div className="mx-auto w-16 h-16 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center mb-6">
+                  <Smartphone className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2">WhatsApp Disconnected</h2>
+                <p className="text-zinc-500 dark:text-zinc-400 mb-8">
+                  This session is currently logged out. Connect your WhatsApp account to resume service.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={handleConnect}
+                    className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <QrCode className="w-5 h-5" />
+                    Connect WhatsApp
+                  </button>
+                  <button
+                    onClick={() => router.push('/dashboard/client/agents')}
+                    className="w-full py-3 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 rounded-xl font-medium transition-colors"
+                  >
+                    Go Back
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="w-full py-3 px-4 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl font-medium transition-colors text-sm"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete Session"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-6 text-left">
+                  <button 
+                    onClick={() => setShowConnect(false)}
+                    className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors mb-4"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                  </button>
+                  <h2 className="text-xl font-bold">Scan QR Code</h2>
+                  <p className="text-sm text-zinc-500">Open WhatsApp on your phone and scan the code.</p>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-zinc-200 inline-block mb-6 shadow-sm">
+                  {qrCode ? (
+                    <QRCodeSVG value={qrCode} size={240} />
+                  ) : (
+                    <div className="w-[240px] h-[240px] flex flex-col items-center justify-center bg-zinc-50 rounded-lg">
+                      <Loader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
+                      <span className="text-sm text-zinc-400">Generating QR...</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-center gap-2 text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50 py-3 px-4 rounded-lg">
+                  <Shield className="w-4 h-4 text-green-500" />
+                  <span>End-to-end encrypted connection</span>
+                </div>
+              </>
+            )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       {/* Header */}
@@ -349,7 +474,7 @@ export default function SessionDetailsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {session.status === 'active' || session.status === 'open' ? (
+            {session.status !== 'init' ? (
               <button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
