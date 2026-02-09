@@ -230,6 +230,7 @@ export default function SessionDetailsPage() {
            const aRes = await api.get(`/agents/${activeAgentId}`);
            const a = aRes.data.agent;
            agentConfig = {
+             ...agentConfig, // Preserve existing config (like isEnabled)
              model: a.model || "openai",
              systemPrompt: a.system_prompt || "",
              agentName: a.name || `Agent for ${s.phone_number || s.id.slice(0, 8)}`,

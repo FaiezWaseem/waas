@@ -186,7 +186,7 @@ class ConnectionManager {
                 if (fs.existsSync(sessionDir)) {
                     fs.rmSync(sessionDir, { recursive: true, force: true })
                 }
-                this._initSocket(id, s.userId, s.agentId)
+                this._initSocket(id, s.userId, s.agentId, s.aiEnabled)
             }
         }
     } catch(e) { 
@@ -203,7 +203,7 @@ class ConnectionManager {
             if (!this.sessions.has(session.id)) {
                 console.log(`Restoring session ${session.id}`)
                 // We don't await this so they restore in parallel
-                this._initSocket(session.id, session.user_id, session.agent_id).catch(err => {
+                this._initSocket(session.id, session.user_id, session.agent_id, session.ai_enabled).catch(err => {
                     console.error(`Failed to restore session ${session.id}:`, err)
                 })
             }
@@ -213,7 +213,7 @@ class ConnectionManager {
     }
   }
 
-  async _initSocket(id, userId, agentId) {
+  async _initSocket(id, userId, agentId, aiEnabled = 1) {
     const { default: makeWASocket, useMultiFileAuthState, Browsers, DisconnectReason } = await import('@whiskeysockets/baileys')
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${id}`)
 
@@ -225,7 +225,7 @@ class ConnectionManager {
       retryRequestDelayMs: 2000,
     })
 
-    this.sessions.set(id, { sock, status: 'connecting', userId, agentId })
+    this.sessions.set(id, { sock, status: 'connecting', userId, agentId, aiEnabled: !!aiEnabled })
 
     sock.ev.on('connection.update', async(update) => {
       const { connection, lastDisconnect, qr } = update
@@ -237,7 +237,7 @@ class ConnectionManager {
           console.log(`Session ${id} closed. Reason: ${statusCode}, Reconnect: ${shouldReconnect}`)
           if (shouldReconnect) {
              // add a small delay to avoid tight loops
-             setTimeout(() => this._initSocket(id, userId, agentId), 3000)
+             setTimeout(() => this._initSocket(id, userId, agentId, this.sessions.get(id)?.aiEnabled), 3000)
           } else {
              // if logged out, don't delete the session, just reset it to init state
              console.log(`Session ${id} logged out. Resetting to init state...`)
@@ -260,7 +260,7 @@ class ConnectionManager {
                 if(s) { s.status = 'init'; s.qr = null; this.sessions.set(id, s); }
 
                 // 4. restart socket to get new QR
-                this._initSocket(id, userId, agentId)
+                this._initSocket(id, userId, agentId, this.sessions.get(id)?.aiEnabled)
              } catch(e) { console.error('logout reset failed', e) }
           }
       }
@@ -281,14 +281,16 @@ class ConnectionManager {
           console.error(`Error updating session details for ${id}`, e)
         }
       }
-      const s = this.sessions.get(id) || { userId, agentId }
+      const s = this.sessions.get(id) || { userId, agentId, aiEnabled: !!(this.sessions.get(id)?.aiEnabled) }
       if (qr) s.qr = qr
       if (connection) s.status = connection
       if (lastDisconnect) s.lastDisconnect = lastDisconnect
       // keep existing fields
       s.userId = userId
       s.agentId = agentId
-      
+      // Ensure aiEnabled is preserved or defaulted
+      if (s.aiEnabled === undefined) s.aiEnabled = true;
+
       this.sessions.set(id, s)
 
       // auto save
@@ -337,6 +339,13 @@ class ConnectionManager {
         // find bound agent for this session
         // use passed agentId or fetch fresh from DB/memory
         const s = this.sessions.get(id) || {}
+        
+        // CHECK AI ENABLED STATUS
+        if (s.aiEnabled === false) {
+           console.log(`Session ${id} AI disabled. Ignoring message.`)
+           return
+        }
+
         // prioritize s.agentId (which tracks live updates) over the closure variable agentId
         // check if s.agentId is explicitly set (even to null)
         let currentAgentId = s.agentId
