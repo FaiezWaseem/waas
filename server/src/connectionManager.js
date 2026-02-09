@@ -148,10 +148,15 @@ class ConnectionManager {
       console.log(`Session ${id} update: connection=${connection}, qr=${qr ? 'YES' : 'NO'}`)
 
       if (connection === 'close') {
-          const shouldReconnect = (lastDisconnect.error)?.output?.statusCode === DisconnectReason.restartRequired
-          console.log(`Session ${id} closed. Reconnect: ${shouldReconnect}`)
+          const statusCode = (lastDisconnect.error)?.output?.statusCode
+          const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+          console.log(`Session ${id} closed. Reason: ${statusCode}, Reconnect: ${shouldReconnect}`)
           if (shouldReconnect) {
-             this._initSocket(id, userId, agentId)
+             // add a small delay to avoid tight loops
+             setTimeout(() => this._initSocket(id, userId, agentId), 3000)
+          } else {
+             // if logged out, clean up
+             this.deleteSession(id).catch(console.error)
           }
       }
 
@@ -385,6 +390,24 @@ class ConnectionManager {
     } catch (e) {
       console.error('getMessages failed', e)
       return []
+    }
+  }
+
+  async sendMessage(sessionId, toJid, text) {
+    const s = this.sessions.get(sessionId)
+    if (!s || !s.sock) throw new Error('Session not active')
+
+    await s.sock.sendMessage(toJid, { text })
+
+    // persist
+    try {
+      const db = require('./db')
+      const mid = require('uuid').v4()
+      await db.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid, sessionId, 'out', toJid, text, JSON.stringify({ text })])
+      return { id: mid, text, sender: 'me', time: new Date().toISOString(), status: 'sent' }
+    } catch (e) {
+      console.error('persist outgoing manual message failed', e)
+      throw e
     }
   }
 

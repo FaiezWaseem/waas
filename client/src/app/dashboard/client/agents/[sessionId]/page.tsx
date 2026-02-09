@@ -251,13 +251,28 @@ export default function SessionDetailsPage() {
     }
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !selectedChatId) return;
     
-    // In a real app, you would send this to the backend
-    // For now, just clear the input
+    const text = messageInput;
     setMessageInput("");
+
+    try {
+      const res = await api.post(`/sessions/${sessionId}/chats/${encodeURIComponent(selectedChatId)}/messages`, {
+        text
+      });
+      
+      if (res.data.ok && res.data.message) {
+        setMessages(prev => [...prev, res.data.message]);
+        // optionally refresh chats to update last message
+        fetchChats(); 
+      }
+    } catch (e) {
+      console.error("Failed to send message", e);
+      alert("Failed to send message");
+      setMessageInput(text);
+    }
   };
 
   const calculateUptime = (startDate: string) => {
