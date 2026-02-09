@@ -60,6 +60,7 @@ const models = [
 
 interface SessionConfig {
   isEnabled: boolean;
+  agentName: string;
   excludedNumbers: string;
   model: string;
   systemPrompt: string;
@@ -108,6 +109,7 @@ export default function SessionDetailsPage() {
     agent_id: null,
     config: {
       isEnabled: true,
+      agentName: "",
       excludedNumbers: "",
       model: "gpt-3.5-turbo",
       systemPrompt: ""
@@ -152,7 +154,8 @@ export default function SessionDetailsPage() {
       
       let agentConfig = {
         model: "openai",
-        systemPrompt: ""
+        systemPrompt: "",
+        agentName: `Agent for ${s.phone_number || s.id.slice(0, 8)}`
       };
 
       if (s.agent_id) {
@@ -161,7 +164,8 @@ export default function SessionDetailsPage() {
            const a = aRes.data.agent;
            agentConfig = {
              model: a.model || "openai",
-             systemPrompt: a.system_prompt || ""
+             systemPrompt: a.system_prompt || "",
+             agentName: a.name || `Agent for ${s.phone_number || s.id.slice(0, 8)}`
            };
          } catch (err) {
            console.error("Failed to fetch agent details", err);
@@ -204,6 +208,7 @@ export default function SessionDetailsPage() {
         if (session.agent_id) {
           // Update existing agent
           await api.patch(`/agents/${session.agent_id}`, {
+            name: session.config.agentName,
             model: session.config.model,
             system_prompt: session.config.systemPrompt,
             excluded_numbers: session.config.excludedNumbers
@@ -211,7 +216,7 @@ export default function SessionDetailsPage() {
         } else {
           // Create new agent
           const newAgentRes = await api.post('/agents', {
-            name: `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
+            name: session.config.agentName || `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
             model: session.config.model,
             system_prompt: session.config.systemPrompt,
             webhook_url: "",
@@ -494,6 +499,22 @@ export default function SessionDetailsPage() {
                     </div>
 
                     <div className="space-y-6">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                          Agent Name
+                        </label>
+                        <input
+                          type="text"
+                          value={session.config.agentName}
+                          onChange={(e) => setSession(prev => ({
+                            ...prev,
+                            config: { ...prev.config, agentName: e.target.value }
+                          }))}
+                          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+                          placeholder="My Awesome Agent"
+                        />
+                      </div>
+
                       <div>
                         <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                           AI Model
