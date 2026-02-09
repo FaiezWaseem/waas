@@ -340,7 +340,7 @@ app.post('/sessions/:id/logout', auth.verifyToken, async (req, res) => {
 app.patch('/sessions/:id', auth.verifyToken, async (req, res) => {
   try {
     const id = req.params.id
-    const { agent_id } = req.body
+    const { agent_id, ai_enabled } = req.body
     
     // verify ownership
     const r = await db.pool.query('SELECT user_id FROM sessions WHERE id=$1', [id])
@@ -353,6 +353,16 @@ app.patch('/sessions/:id', auth.verifyToken, async (req, res) => {
       if (manager.sessions.has(id)) {
         const s = manager.sessions.get(id)
         s.agentId = agent_id
+        manager.sessions.set(id, s)
+      }
+    }
+
+    if (ai_enabled !== undefined) {
+      await db.pool.query('UPDATE sessions SET ai_enabled=$1 WHERE id=$2', [ai_enabled ? 1 : 0, id])
+      // update in-memory manager if needed
+       if (manager.sessions.has(id)) {
+        const s = manager.sessions.get(id)
+        s.aiEnabled = !!ai_enabled
         manager.sessions.set(id, s)
       }
     }

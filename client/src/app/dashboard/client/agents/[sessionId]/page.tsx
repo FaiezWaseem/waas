@@ -201,20 +201,39 @@ export default function SessionDetailsPage() {
         setQrCode(s.qr);
       }
       
-      let agentConfig = {
-        model: "openai",
-        systemPrompt: "",
-        agentName: `Agent for ${s.phone_number || s.id.slice(0, 8)}`
-      };
+      let agentConfig: Partial<SessionConfig> = {
+            model: "openai",
+            systemPrompt: "",
+            agentName: `Agent for ${s.phone_number || s.id.slice(0, 8)}`,
+            excludedNumbers: "",
+            isEnabled: s.ai_enabled === 1 || s.ai_enabled === true // default true if undefined in some cases, but DB has default 1
+          };
 
-      if (s.agent_id) {
+      let activeAgentId = s.agent_id;
+
+      // If no agent attached, try to find an existing one to recover state (self-healing)
+      if (!activeAgentId) {
+        try {
+          const agentsRes = await api.get('/agents');
+          if (agentsRes.data.agents && agentsRes.data.agents.length > 0) {
+            // Use the most recent agent
+            activeAgentId = agentsRes.data.agents[0].id;
+            console.log("Found orphaned agent, reusing:", activeAgentId);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (activeAgentId) {
          try {
-           const aRes = await api.get(`/agents/${s.agent_id}`);
+           const aRes = await api.get(`/agents/${activeAgentId}`);
            const a = aRes.data.agent;
            agentConfig = {
              model: a.model || "openai",
              systemPrompt: a.system_prompt || "",
-             agentName: a.name || `Agent for ${s.phone_number || s.id.slice(0, 8)}`
+             agentName: a.name || `Agent for ${s.phone_number || s.id.slice(0, 8)}`,
+             excludedNumbers: a.excluded_numbers || ""
            };
          } catch (err) {
            console.error("Failed to fetch agent details", err);
@@ -228,7 +247,7 @@ export default function SessionDetailsPage() {
         contact: s.contact_name || "",
         phoneNumber: s.phone_number, // Placeholder using ID
         lastActive: new Date(s.last_active).toLocaleString(undefined, { timeZone: 'Asia/Karachi' }),
-        agent_id: s.agent_id,
+        agent_id: activeAgentId,
         messageCount: s.messageCount || 0,
         config: {
           ...session.config,
@@ -253,38 +272,36 @@ export default function SessionDetailsPage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      if (session.config.isEnabled) {
-        if (session.agent_id) {
-          // Update existing agent
-          await api.patch(`/agents/${session.agent_id}`, {
-            name: session.config.agentName,
-            model: session.config.model,
-            system_prompt: session.config.systemPrompt,
-            excluded_numbers: session.config.excludedNumbers
-          });
-        } else {
-          // Create new agent
-          const newAgentRes = await api.post('/agents', {
-            name: session.config.agentName || `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
-            model: session.config.model,
-            system_prompt: session.config.systemPrompt,
-            webhook_url: "",
-            excluded_numbers: session.config.excludedNumbers
-          });
-          const newAgentId = newAgentRes.data.id;
-          
-          // Bind to session
-          await api.patch(`/sessions/${sessionId}`, {
-            agent_id: newAgentId
-          });
-        }
+      if (session.agent_id) {
+        // Update existing agent
+        await api.patch(`/agents/${session.agent_id}`, {
+          name: session.config.agentName,
+          model: session.config.model,
+          system_prompt: session.config.systemPrompt,
+          excluded_numbers: session.config.excludedNumbers || ""
+        });
+
+        // Ensure session is bound (self-healing)
+        await api.patch(`/sessions/${sessionId}`, {
+          agent_id: session.agent_id,
+          ai_enabled: session.config.isEnabled
+        });
       } else {
-        // Disabled - unbind agent if one exists
-        if (session.agent_id) {
-          await api.patch(`/sessions/${sessionId}`, {
-            agent_id: null
-          });
-        }
+        // Create new agent
+        const newAgentRes = await api.post('/agents', {
+          name: session.config.agentName || `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
+          model: session.config.model,
+          system_prompt: session.config.systemPrompt,
+          webhook_url: "",
+          excluded_numbers: session.config.excludedNumbers || ""
+        });
+        const newAgentId = newAgentRes.data.id;
+        
+        // Bind to session
+        await api.patch(`/sessions/${sessionId}`, {
+          agent_id: newAgentId,
+          ai_enabled: session.config.isEnabled
+        });
       }
       
       // refresh data

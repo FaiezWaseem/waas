@@ -78,6 +78,7 @@ async function init() {
       status TEXT,
       qr TEXT,
       auth_path TEXT,
+      ai_enabled BOOLEAN DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE SET NULL

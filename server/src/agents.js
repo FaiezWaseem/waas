@@ -3,6 +3,18 @@ const router = express.Router()
 const db = require('./db')
 const { chatCompletion } = require('./ai')
 
+// list agents for user
+router.get('/', async (req,res)=>{
+  try{
+    const userId = req.user.sub
+    const r = await db.pool.query('SELECT * FROM agents WHERE user_id=$1 ORDER BY created_at DESC', [userId])
+    res.json({ agents: r.rows })
+  }catch(e){
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // create an agent with optional system prompt
 router.post('/', async (req,res)=>{
   try{
