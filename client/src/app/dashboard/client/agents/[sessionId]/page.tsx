@@ -403,13 +403,19 @@ export default function SessionDetailsPage() {
     );
   }
 
-  // Handle Init/Disconnected State
-  if (session.status === 'init' || showConnect) {
+  // Handle Init/Disconnected/Connecting State
+  const isDisconnected = session.status === 'init';
+  const isConnecting = session.status === 'connecting';
+  // If connecting and we have no phone number, assume we are waiting for QR scan
+  const isWaitingForScan = isConnecting && !session.phoneNumber;
+  const showQrView = showConnect || isWaitingForScan;
+
+  if (isDisconnected || showQrView) {
     return (
       <div className="h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-6">
         <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800 p-8 text-center">
             
-            {!showConnect ? (
+            {!showQrView ? (
               <>
                 <div className="mx-auto w-16 h-16 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center mb-6">
                   <Smartphone className="w-8 h-8 text-orange-600 dark:text-orange-400" />
@@ -445,7 +451,7 @@ export default function SessionDetailsPage() {
               <>
                 <div className="mb-6 text-left">
                   <button 
-                    onClick={() => setShowConnect(false)}
+                    onClick={() => isWaitingForScan ? router.push('/dashboard/client/agents') : setShowConnect(false)}
                     className="flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors mb-4"
                   >
                     <ArrowLeft className="w-4 h-4" />
@@ -609,10 +615,6 @@ export default function SessionDetailsPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-zinc-500">Contact</span>
                         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{session.contact}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-zinc-500">Battery</span>
-                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{session.batteryLevel}%</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-zinc-500">Last Active</span>
