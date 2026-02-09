@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Phone, Activity, QrCode, Loader2 } from "lucide-react";
+import { Clock, Phone, Activity, QrCode, Loader2, Bot } from "lucide-react";
 import { motion } from "framer-motion";
 import api from "@/lib/api";
 
@@ -94,6 +94,7 @@ export default function AgentsPage() {
                 <tr className="bg-zinc-50/50 text-zinc-500 dark:bg-zinc-800/50">
                   <th className="px-6 py-3 font-medium">Session ID / Agent</th>
                   <th className="px-6 py-3 font-medium">Status</th>
+                  <th className="px-6 py-3 font-medium">AI Status</th>
                   <th className="px-6 py-3 font-medium">Created At</th>
                   <th className="px-6 py-3 font-medium">Platform</th>
                   <th className="px-6 py-3 font-medium text-right">Actions</th>
@@ -121,6 +122,16 @@ export default function AgentsPage() {
                         <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${session.status === "open"  ? "bg-green-500" : "bg-zinc-400"
                           }`} />
                         {(session.status || "unknown")}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        session.ai_enabled !== 0
+                          ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                          : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                      }`}>
+                        <Bot className="h-3 w-3" />
+                        {session.ai_enabled !== 0 ? "Enabled" : "Disabled"}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">

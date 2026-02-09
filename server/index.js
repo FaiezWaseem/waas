@@ -189,7 +189,7 @@ app.get('/sessions', auth.verifyToken, async (req, res) => {
   try {
     // Join with agents table to get agent name if needed
     const r = await db.pool.query(`
-      SELECT s.id, s.status, s.created_at, s.agent_id, a.name as agent_name 
+      SELECT s.id, s.status, s.created_at, s.agent_id, s.ai_enabled, a.name as agent_name 
       FROM sessions s 
       LEFT JOIN agents a ON s.agent_id = a.id 
       WHERE s.user_id=$1 
