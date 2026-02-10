@@ -271,7 +271,7 @@ export default function Home() {
                   <div className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">{plan.name}</div>
                   <div className="mb-6 flex items-baseline text-zinc-900 dark:text-white">
                     <span className="text-4xl font-bold tracking-tight">
-                      {plan.price_monthly === 0 ? "Free" : `$${plan.price_monthly}`}
+                      {plan.price_monthly === 0 ? "Free" : `Rs ${plan.price_monthly}`}
                     </span>
                     {plan.price_monthly > 0 && <span className="text-zinc-500">/mo</span>}
                   </div>
