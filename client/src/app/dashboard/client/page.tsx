@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { MessageSquare, Zap, Bot, Plus, ArrowRight } from "lucide-react";
+import { MessageSquare, Zap, Bot, Plus, ArrowRight, Smartphone } from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
 
@@ -9,7 +9,8 @@ export default function ClientDashboard() {
   const [stats, setStats] = useState({
     messagesSent: 0,
     creditsRemaining: 0,
-    activeAgents: 0
+    activeAgents: 0,
+    sessions: { active: 0, max: 0 }
   });
   const [recentMessages, setRecentMessages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,7 +40,21 @@ export default function ClientDashboard() {
         <p className="text-zinc-500">Manage your WhatsApp campaigns and messages.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="rounded-full bg-blue-50 dark:bg-blue-900/20 p-3 text-blue-600 dark:text-blue-400">
+              <Smartphone className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-zinc-500">Active Sessions</p>
+              <h4 className="text-2xl font-bold">
+                {stats.sessions?.active || 0} <span className="text-sm text-zinc-400 font-normal">/ {stats.sessions?.max || 0}</span>
+              </h4>
+            </div>
+          </div>
+        </div>
+
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="rounded-full bg-indigo-50 dark:bg-indigo-900/20 p-3 text-indigo-600 dark:text-indigo-400">

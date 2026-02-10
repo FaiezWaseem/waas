@@ -24,10 +24,18 @@ router.get('/stats', async (req, res) => {
     )
     const agentsCount = parseInt(agents.rows[0].count)
 
-    // 3. Get subscription/plan info for credits
+    // 3. Get active sessions count
+    const sessions = await db.pool.query(
+      'SELECT COUNT(*) as count FROM sessions WHERE user_id = $1',
+      [userId]
+    )
+    console.log('[DEBUG] sessions count query result:', sessions.rows)
+    const activeSessionsCount = sessions.rows && sessions.rows[0] ? parseInt(sessions.rows[0].count || 0) : 0
+
+    // 4. Get subscription/plan info for credits
     // Find active subscription
     const sub = await db.pool.query(
-      `SELECT p.max_messages 
+      `SELECT p.max_messages, p.max_sessions 
        FROM subscriptions s 
        JOIN plans p ON s.plan_id = p.id 
        WHERE s.user_id = $1 AND s.status = 'active' 
@@ -36,8 +44,10 @@ router.get('/stats', async (req, res) => {
     )
     
     let creditsRemaining = 0
+    let maxSessions = 0
     if (sub.rows.length > 0) {
       const maxMessages = sub.rows[0].max_messages
+      maxSessions = sub.rows[0].max_sessions
       // For now, simple calculation: max - total. 
       // In a real system, we'd filter messages by billing period.
       // Assuming 'credits' means 'messages remaining'
@@ -52,7 +62,11 @@ router.get('/stats', async (req, res) => {
     res.json({
       messagesSent: messagesCount,
       creditsRemaining,
-      activeAgents: agentsCount
+      activeAgents: agentsCount,
+      sessions: {
+        active: activeSessionsCount,
+        max: maxSessions
+      }
     })
   } catch (e) {
     console.error(e)
