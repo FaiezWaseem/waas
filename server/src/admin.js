@@ -79,11 +79,40 @@ router.post('/users', async (req,res)=>{
   }catch(e){ console.error(e); res.status(400).json({ error: e.message }) }
 })
 
-// update user (admin) - profile & role
+// update user (admin) - profile & role & optional password
 router.put('/users/:id', async (req,res)=>{
   try{
-    const { name,role } = req.body
-    await db.pool.query('UPDATE users SET name=$1, role=$2 WHERE id=$3',[name,role,req.params.id])
+    const { name, role, email, password } = req.body
+    
+    // Build query dynamically based on provided fields
+    const updates = []
+    const values = []
+    let idx = 1
+    
+    if (name) {
+      updates.push(`name=$${idx++}`)
+      values.push(name)
+    }
+    if (role) {
+      updates.push(`role=$${idx++}`)
+      values.push(role)
+    }
+    if (email) {
+      updates.push(`email=$${idx++}`)
+      values.push(email)
+    }
+    if (password) {
+      const bcrypt = require('bcrypt')
+      const hash = await bcrypt.hash(password, 10)
+      updates.push(`password_hash=$${idx++}`)
+      values.push(hash)
+    }
+    
+    if (updates.length === 0) return res.json({ ok: true }) // nothing to update
+    
+    values.push(req.params.id)
+    await db.pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id=$${idx}`, values)
+    
     res.json({ ok:true })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
 })
