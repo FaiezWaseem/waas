@@ -136,7 +136,7 @@ export default function SessionDetailsPage() {
   useEffect(() => {
     if (!sessionId) return;
 
-    const socket = io("http://localhost:4000");
+    const socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000");
 
     socket.on("connect", () => {
       console.log("Connected to socket.io");

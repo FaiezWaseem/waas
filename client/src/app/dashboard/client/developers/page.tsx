@@ -35,7 +35,7 @@ export default function DevelopersPage() {
     // No, backend is typically separate or proxied. 
     // If proxied, it's same origin /api/v1. But user said "not frontend one".
     // So we hardcode localhost:4000 for now as we are in dev environment.
-    const backendUrl = "http://localhost:4000"; 
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"; 
     setOrigin(backendUrl);
     
     fetchKeys();
