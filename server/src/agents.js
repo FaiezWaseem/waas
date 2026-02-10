@@ -42,7 +42,7 @@ router.post('/', async (req,res)=>{
     try{
       await db.pool.query('CREATE TABLE IF NOT EXISTS agents_meta (agent_id TEXT PRIMARY KEY, system_prompt TEXT, model TEXT, excluded_numbers TEXT)')
     }catch(e){/* ignore */}
-    await db.pool.query('INSERT OR REPLACE INTO agents_meta(agent_id,system_prompt,model,excluded_numbers) VALUES($1,$2,$3,$4)',[id,system_prompt||null,model||'gpt-3.5-turbo',excluded_numbers||null])
+    await db.pool.query('REPLACE INTO agents_meta(agent_id,system_prompt,model,excluded_numbers) VALUES($1,$2,$3,$4)',[id,system_prompt||null,model||'gpt-3.5-turbo',excluded_numbers||null])
     res.json({ id, name, webhook_url })
   }catch(e){
     console.error(e)

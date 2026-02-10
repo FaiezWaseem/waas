@@ -6,7 +6,7 @@ async function reserveSessionSlot(userId){
   try{
     const db = require('./db')
     const subRes = await db.pool.query('SELECT s.period_start,s.period_end,p.max_sessions FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[userId])
-    
+    console.log(subRes)
     if (!subRes.rows || !subRes.rows.length) {
         console.log(`[LimitCheck] User ${userId} No Subscription found`)
         return true // Default to allow if no sub? Or block? Original code allowed.
@@ -28,16 +28,21 @@ async function reserveSessionSlot(userId){
         usageId = usageRes.rows[0].id
     }
 
-    // Atomic increment: Only update if current sessions_count < max_sessions
-    const res = await db.pool.query('UPDATE usage SET sessions_count = sessions_count + 1 WHERE id=$1 AND sessions_count < $2', [usageId, sub.max_sessions])
-    
-    if (res.rows && res.rows.changes > 0) {
-        console.log(`[LimitCheck] Reserved slot for user ${userId}.`)
-        return true
-    } else {
-        console.log(`[LimitCheck] User ${userId} session limit reached.`)
-        return false
+    // 1. Check concurrent sessions limit from sessions table (Active Sessions)
+    const sessionsCountRes = await db.pool.query('SELECT count(*) as count FROM sessions WHERE user_id=$1', [userId])
+    // Handle different return types (SQLite/MySQL might return string or number)
+    const activeSessions = parseInt(sessionsCountRes.rows[0].count)
+
+    if (activeSessions >= sub.max_sessions) {
+         console.log(`[LimitCheck] User ${userId} concurrent session limit reached (${activeSessions}/${sub.max_sessions}).`)
+         return false
     }
+
+    // 2. Increment usage counter (Total Sessions Created) - purely for analytics/tracking
+    await db.pool.query('UPDATE usage SET sessions_count = sessions_count + 1 WHERE id=$1', [usageId])
+    
+    console.log(`[LimitCheck] Reserved slot for user ${userId}.`)
+    return true
 
   }catch(e){ 
       console.error('session reservation failed', e && e.message) 

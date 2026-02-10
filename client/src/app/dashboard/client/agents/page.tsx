@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Clock, Phone, Activity, QrCode, Loader2, Bot } from "lucide-react";
-import { motion } from "framer-motion";
-import api from "@/lib/api";
+  import { useRouter } from "next/navigation";
+  import { Clock, Phone, Activity, QrCode, Loader2, Bot, Trash2, AlertTriangle, X } from "lucide-react";
+  import { motion, AnimatePresence } from "framer-motion";
+  import api from "@/lib/api";
 
 
 
@@ -16,6 +16,7 @@ export default function AgentsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSessions();
@@ -41,6 +42,23 @@ export default function AgentsPage() {
 
   const handleOpenConnectPage = () => {
     router.push('/dashboard/client/agents/connect');
+  };
+
+  const handleDeleteClick = (sessionId: string) => {
+    setSessionToDelete(sessionId);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
+    
+    try {
+      await api.delete(`/sessions/${sessionToDelete}`);
+      setSessions(prev => prev.filter(s => s.id !== sessionToDelete));
+      setSessionToDelete(null);
+    } catch (error) {
+      console.error("Failed to delete session", error);
+      alert("Failed to delete session");
+    }
   };
 
   return (
@@ -144,12 +162,21 @@ export default function AgentsPage() {
                       WhatsApp
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => router.push(`/dashboard/client/agents/${session.id}`)}
-                        className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800 transition-colors"
-                      >
-                        Manage
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => router.push(`/dashboard/client/agents/${session.id}`)}
+                          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800 transition-colors"
+                        >
+                          Manage
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(session.id)}
+                          className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                          title="Delete Session"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -158,6 +185,55 @@ export default function AgentsPage() {
           )}
         </div>
       </motion.div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {sessionToDelete && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSessionToDelete(null)}
+              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+              >
+                <div className="p-6">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                    <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                    Delete Session
+                  </h3>
+                  <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    Are you sure you want to delete this session? This action cannot be undone and will disconnect the associated WhatsApp number.
+                  </p>
+                </div>
+                <div className="flex items-center justify-end gap-3 bg-zinc-50 px-6 py-4 dark:bg-zinc-800/50">
+                  <button
+                    onClick={() => setSessionToDelete(null)}
+                    className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteSession}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+                  >
+                    Delete Session
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

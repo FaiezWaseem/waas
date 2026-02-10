@@ -34,7 +34,7 @@ export default function DevelopersPage() {
     // Fallback to localhost:4000 if we can't determine it, or use a relative path if they were same domain?
     // No, backend is typically separate or proxied. 
     // If proxied, it's same origin /api/v1. But user said "not frontend one".
-    // So we hardcode localhost:4000 for now as we are in dev environment.
+    // We use environment variable or fallback to localhost
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"; 
     setOrigin(backendUrl);
     

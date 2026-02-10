@@ -56,9 +56,10 @@ if (DB_TYPE === 'mysql') {
       let mysqlSql = sql.replace(/ FROM usage /gi, ' FROM `usage` ')
                         .replace(/ INTO usage\(/gi, ' INTO `usage`(')
                         .replace(/ INTO usage /gi, ' INTO `usage` ')
-                        .replace(/ UPDATE usage /gi, ' UPDATE `usage` ')
-                        .replace(/INSERT OR IGNORE/gi, 'INSERT IGNORE')
-                         .replace(/datetime\('now'\)/gi, 'NOW()')
+                        .replace(/(^|\s)UPDATE usage /gi, '$1UPDATE `usage` ')
+                        .replace(/INSERT\s+OR\s+IGNORE/gi, 'INSERT IGNORE')
+                        .replace(/INSERT\s+OR\s+REPLACE/gi, 'REPLACE')
+                        .replace(/datetime\('now'\)/gi, 'NOW()')
                          .trim()
 
       // 2. Convert params

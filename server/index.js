@@ -151,7 +151,7 @@ app.post('/admin/plans', auth.verifyToken, auth.requireRole('admin'), async (req
   try{
     const { id,name,max_sessions,max_agents,max_messages,max_chats } = req.body
     const pid = id || require('uuid').v4()
-    await db.pool.query('INSERT OR REPLACE INTO plans(id,name,max_sessions,max_agents,max_messages,max_chats) VALUES($1,$2,$3,$4,$5,$6)',[pid,name,max_sessions,max_agents,max_messages,max_chats])
+    await db.pool.query('REPLACE INTO plans(id,name,max_sessions,max_agents,max_messages,max_chats) VALUES($1,$2,$3,$4,$5,$6)',[pid,name,max_sessions,max_agents,max_messages,max_chats])
     res.json({ ok:true, id:pid })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
 })
