@@ -17,7 +17,8 @@ import {
   Menu,
   X,
   Bot,
-  BookOpen
+  BookOpen,
+  Code2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -55,6 +56,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
     { href: "/dashboard/client", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/client/agents", label: "Agents", icon: Bot },
     { href: "/dashboard/client/chats", label: "Chats", icon: MessageSquare },
+    { href: "/dashboard/client/developers", label: "Developers", icon: Code2 },
     { href: "/dashboard/client/subscription", label: "Upgrade Plans", icon: CreditCard },
     { href: "/dashboard/client/settings", label: "Settings", icon: Settings },
   ];
