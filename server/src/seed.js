@@ -116,7 +116,7 @@ async function seed() {
           read_time: "5 min read",
           author_name: "Faiez",
           author_role: "Founder & CEO",
-          published_at: "2026-02-08T10:00:00ZZ"
+          published_at: "2026-02-08 10:00:00"
         },
         {
           title: "How to Build a WhatsApp Chatbot in 5 Minutes",
