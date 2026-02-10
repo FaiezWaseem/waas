@@ -2,6 +2,16 @@ const express = require('express')
 const router = express.Router()
 const db = require('./db')
 
+// Helper to format dates for MySQL (YYYY-MM-DD HH:MM:SS)
+const formatDate = (d) => {
+  if (!d) return null
+  try {
+    return new Date(d).toISOString().slice(0, 19).replace('T', ' ')
+  } catch (e) {
+    return d
+  }
+}
+
 // get dashboard stats
 router.get('/stats', async (req,res)=>{
   try{
@@ -82,7 +92,7 @@ router.put('/users/:id', async (req,res)=>{
 router.put('/users/:id/subscription/:subId', async (req,res)=>{
   try{
     const { planId, period_start, period_end } = req.body
-    await db.pool.query('UPDATE subscriptions SET plan_id=$1, period_start=$2, period_end=$3 WHERE id=$4 AND user_id=$5',[planId, period_start, period_end, req.params.subId, req.params.id])
+    await db.pool.query('UPDATE subscriptions SET plan_id=$1, period_start=$2, period_end=$3 WHERE id=$4 AND user_id=$5',[planId, formatDate(period_start), formatDate(period_end), req.params.subId, req.params.id])
     res.json({ ok:true })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
 })
@@ -101,11 +111,15 @@ router.post('/users/:id/subscription', async (req,res)=>{
     const { planId, period_start, period_end } = req.body
     if (!planId) return res.status(400).json({ error: 'planId required' })
     const pid = require('uuid').v4()
-    const start = period_start || new Date().toISOString()
-    const end = period_end || (()=>{ const d=new Date(start); d.setMonth(d.getMonth()+1); return d.toISOString() })()
-    await db.pool.query('INSERT INTO subscriptions(id,user_id,plan_id,period_start,period_end,created_at) VALUES($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)',[pid,req.params.id,planId,start,end])
+    const start = period_start ? new Date(period_start) : new Date()
+    const end = period_end ? new Date(period_end) : (()=>{ const d=new Date(start); d.setMonth(d.getMonth()+1); return d })()
+    
+    const startStr = formatDate(start)
+    const endStr = formatDate(end)
+    
+    await db.pool.query('INSERT INTO subscriptions(id,user_id,plan_id,period_start,period_end,created_at) VALUES($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)',[pid,req.params.id,planId,startStr,endStr])
     const usageId = require('uuid').v4()
-    await db.pool.query('INSERT INTO usage(id,user_id,period_start,period_end,messages_count,chats_count,created_at) VALUES($1,$2,$3,$4,0,0,CURRENT_TIMESTAMP)',[usageId,req.params.id,start,end])
+    await db.pool.query('INSERT INTO usage(id,user_id,period_start,period_end,messages_count,chats_count,created_at) VALUES($1,$2,$3,$4,0,0,CURRENT_TIMESTAMP)',[usageId,req.params.id,startStr,endStr])
     res.json({ ok:true })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
 })
@@ -132,7 +146,7 @@ router.post('/invoices', async (req,res)=>{
     const { user_id, subscription_id, plan_id, period_start, period_end, amount, messages_count, chats_count } = req.body
     if (!user_id || !plan_id || !period_start || !period_end) return res.status(400).json({ error: 'missing fields' })
     const id = require('uuid').v4()
-    await db.pool.query('INSERT INTO invoices(id,user_id,subscription_id,plan_id,period_start,period_end,amount,messages_count,chats_count,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,CURRENT_TIMESTAMP)',[id,user_id,subscription_id,plan_id,period_start,period_end,amount||0,messages_count||0,chats_count||0])
+    await db.pool.query('INSERT INTO invoices(id,user_id,subscription_id,plan_id,period_start,period_end,amount,messages_count,chats_count,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,CURRENT_TIMESTAMP)',[id,user_id,subscription_id,plan_id,formatDate(period_start),formatDate(period_end),amount||0,messages_count||0,chats_count||0])
     res.json({ ok:true, id })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
 })
@@ -196,7 +210,7 @@ router.put('/subscriptions/:id', async (req,res)=>{
     const { status, plan_id, period_start, period_end } = req.body
     await db.pool.query(
       'UPDATE subscriptions SET status=$1, plan_id=$2, period_start=$3, period_end=$4 WHERE id=$5',
-      [status, plan_id, period_start, period_end, req.params.id]
+      [status, plan_id, formatDate(period_start), formatDate(period_end), req.params.id]
     )
     res.json({ ok:true })
   }catch(e){ console.error(e); res.status(500).json({ error: e.message }) }
