@@ -7,15 +7,17 @@ router.get('/stats', async (req, res) => {
   try {
     const userId = req.user.sub
     
-    // 1. Get total messages count
-    const msgs = await db.pool.query(
-      `SELECT COUNT(*) as count 
-       FROM messages m 
-       JOIN sessions s ON m.session_id = s.id 
-       WHERE s.user_id = $1`,
+    // 1. Get total messages count (for current period)
+    const usageRes = await db.pool.query(
+      `SELECT messages_count 
+       FROM usage 
+       WHERE user_id = $1 
+       ORDER BY period_start DESC LIMIT 1`,
       [userId]
     )
-    const messagesCount = parseInt(msgs.rows[0].count)
+    
+    // Default to 0 if no usage record found
+    const messagesCount = usageRes.rows.length > 0 ? parseInt(usageRes.rows[0].messages_count) : 0
 
     // 2. Get active agents count
     const agents = await db.pool.query(
