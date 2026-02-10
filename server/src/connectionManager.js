@@ -377,15 +377,35 @@ class ConnectionManager {
             }
 
             // increment messages
-            await db3.pool.query('UPDATE usage SET messages_count = messages_count + 1 WHERE id=$1',[usageRow.id])
-            const u2 = await db3.pool.query('SELECT messages_count FROM usage WHERE id=$1',[usageRow.id])
-            const used = (u2.rows && u2.rows[0]) ? u2.rows[0].messages_count : 0
+            // We should only increment on OUTGOING messages (AI replies), but here we are processing INCOMING.
+            // However, we need to check limits BEFORE processing.
+            // If the model is "pay per message sent by AI", we count later.
+            // If "pay per interaction" (incoming + outgoing), we count here.
+            // Usually, SAAS charges for AI responses or total messages processed.
+            // Let's assume we charge for AI REPLIES. So we shouldn't increment here, but we should CHECK limit here.
+            
+            // Fix: Don't increment here. Just check.
+            // But wait, existing logic increments here. 
+            // If we change it, we might break "pay per incoming" model if that was intended.
+            // The user says "message ai auto reply are not considered".
+            // This implies the current logic counts INCOMING messages as usage?
+            // Line 380: UPDATE usage SET messages_count = messages_count + 1
+            // This increments for every INCOMING message that triggers the agent.
+            
+            // If the user wants to count AI replies, we should increment AFTER sending reply.
+            // Let's remove the increment here and move it to after ai.chatCompletion success.
+            // AND we still need to check limit here to prevent processing if quota full.
 
-            if (subRow.max_messages && used > subRow.max_messages){
+            const u2 = await db3.pool.query('SELECT messages_count FROM usage WHERE id=$1',[usageRow.id])
+            const used = (u2.rows && u2.rows[0]) ? Number(u2.rows[0].messages_count) : 0
+            
+            // Check limit
+            const maxMsg = subRow.max_messages === null ? -1 : Number(subRow.max_messages)
+            if (maxMsg !== -1 && used >= maxMsg){
               console.error('user over messages quota, not replying')
               await db3.pool.query('UPDATE usage SET last_alerted_at=CURRENT_TIMESTAMP WHERE id=$1',[usageRow.id])
               // notify user via webhooks if registered
-              try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'messages', used, limit: subRow.max_messages }) }catch(e){ console.error('notify failed', e && e.message) }
+              try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'messages', used, limit: maxMsg }) }catch(e){ console.error('notify failed', e && e.message) }
               return
             }
 
@@ -448,6 +468,24 @@ class ConnectionManager {
               const db3 = require('./db')
               const mid2 = require('uuid').v4()
               await db3.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)',[mid2,id,'out',msg.key.remoteJid,reply,JSON.stringify({ reply })])
+              
+              // Increment usage here for the outgoing AI reply
+              // Re-fetch usageRow.id if needed, or assume we have it from closure scope?
+              // usageRow is defined in the outer scope, but inside a try block.
+              // We need to ensure we have access to it or re-fetch.
+              // Since the outer try block wraps the whole thing, we might not have access if we are in a different scope?
+              // Actually, usageRow is defined inside the 'enforce plan usage' block which is separate.
+              // We need to fetch it again or pass it down.
+              // Simplest is to fetch active usage again for this user.
+              
+              const subRes = await db3.pool.query('SELECT period_start FROM subscriptions WHERE user_id=$1 AND status=\'active\' ORDER BY period_start DESC LIMIT 1', [userId])
+              if (subRes.rows.length) {
+                 const periodStart = subRes.rows[0].period_start
+                 // Update usage
+                 // Note: we don't need to fetch ID if we match by user_id and period_start
+                 await db3.pool.query('UPDATE usage SET messages_count = messages_count + 1 WHERE user_id=$1 AND period_start=$2', [userId, periodStart])
+              }
+
             }catch(e){ console.error('persist outgoing failed', e && e.message) }
           }
         }catch(e){ 
