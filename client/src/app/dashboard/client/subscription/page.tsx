@@ -267,7 +267,7 @@ export default function SubscriptionPage() {
                   <li>Send the screenshot to Admin on WhatsApp:</li>
                 </ol>
                 <p className="mt-2 font-mono font-bold text-center text-lg text-green-600 dark:text-green-400 select-all">
-                  +92 300 1234567
+                  {process.env.NEXT_PUBLIC_SUPPORT_PHONE}
                 </p>
               </div>
             </div>
