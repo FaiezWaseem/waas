@@ -68,6 +68,7 @@ Create a `.env` file based on the example:
 cp .env.example .env
 ```
 > **Note:** You must provide a valid `OPENAI_API_KEY` in the `.env` file for AI features to work.
+> ***Warning:*** The default database is SQLite. For production, switch to MySQL.
 
 Start the backend server:
 ```bash
@@ -125,7 +126,6 @@ waas/
 │   │   ├── ai.js           # OpenAI integration
 │   │   ├── connectionManager.js # WhatsApp socket handling
 │   │   └── ...
-│   ├── data/               # SQLite database file
 │   └── ...
 └── README.md               # This file
 ```
