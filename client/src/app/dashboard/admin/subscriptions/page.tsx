@@ -18,7 +18,7 @@ export default function SubscriptionsPage() {
   const [formData, setFormData] = useState({
     name: "",
     price: "",
-    currency: "$",
+    currency: "Rs",
     billingCycle: "Monthly",
     description: "",
     features: "",
@@ -63,7 +63,7 @@ export default function SubscriptionsPage() {
         ...s,
         user: s.user_name || s.user_email || 'Unknown',
         plan: s.plan_name || 'Unknown',
-        amount: `$${s.amount || 0}`,
+        amount: `Rs ${s.amount || 0}`,
         status: s.status || 'active', // default
         nextBilling: s.period_end ? new Date(s.period_end).toLocaleDateString() : 'N/A'
       })));
@@ -81,7 +81,7 @@ export default function SubscriptionsPage() {
       setFormData({
         name: plan.name,
         price: plan.price.toString(),
-        currency: "$",
+        currency: "Rs",
         billingCycle: "Monthly",
         description: plan.description || "",
         features: plan.features.join("\n"),
@@ -96,7 +96,7 @@ export default function SubscriptionsPage() {
       setFormData({
         name: "",
         price: "",
-        currency: "$",
+        currency: "Rs",
         billingCycle: "Monthly",
         description: "",
         features: "",
@@ -276,7 +276,7 @@ export default function SubscriptionsPage() {
           {/* Stats Cards */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: "Total Revenue", value: `$${stats.monthly_revenue || 0}`, change: "+0%", trend: "up" },
+              { label: "Total Revenue", value: `Rs ${stats.monthly_revenue || 0}`, change: "+0%", trend: "up" },
               { label: "Active Subscriptions", value: stats.active_subscriptions || 0, change: "+0%", trend: "up" },
               { label: "Total Users", value: stats.total_users || 0, change: "+0%", trend: "up" },
               { label: "Server Status", value: stats.server_status || "Stable", change: "", trend: "up" },
@@ -366,7 +366,7 @@ export default function SubscriptionsPage() {
                   <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{plan.name}</h3>
                   <div className="mt-1 flex items-baseline gap-1">
                     <span className="text-3xl font-bold text-zinc-900 dark:text-white">
-                      ${plan.price}
+                      Rs {plan.price}
                     </span>
                     <span className="text-sm text-zinc-500">/mo</span>
                   </div>

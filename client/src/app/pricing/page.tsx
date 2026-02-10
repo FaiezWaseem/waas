@@ -4,8 +4,8 @@ import { motion } from "framer-motion";
 
 export default function Pricing() {
   const plans = [
-    { name: "Starter", price: "$9", desc: "For small projects and prototypes", features: ["100 contacts/mo", "Basic templates", "Email support"] },
-    { name: "Pro", price: "$49", desc: "For growing teams", features: ["2,500 contacts/mo", "Advanced templates", "Priority email support"] },
+    { name: "Starter", price: "Rs 1,000", desc: "For small projects and prototypes", features: ["100 contacts/mo", "Basic templates", "Email support"] },
+    { name: "Pro", price: "Rs 10,000", desc: "For growing teams", features: ["2,500 contacts/mo", "Advanced templates", "Priority email support"] },
     { name: "Enterprise", price: "Contact us", desc: "Custom plans for large teams", features: ["Custom limits", "SLA & onboarding", "Dedicated support"] },
   ];
 

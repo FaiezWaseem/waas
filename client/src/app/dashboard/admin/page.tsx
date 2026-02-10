@@ -47,7 +47,7 @@ export default function AdminDashboard() {
     },
     {
       name: "Monthly Revenue",
-      value: `$${stats.monthly_revenue.toLocaleString()}`,
+      value: `Rs ${stats.monthly_revenue.toLocaleString()}`,
       change: "+23%",
       trend: "up",
       icon: DollarSign,

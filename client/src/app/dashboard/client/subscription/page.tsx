@@ -126,7 +126,7 @@ export default function SubscriptionPage() {
               <div className="mb-4">
                 <h3 className="text-lg font-semibold">{plan.name}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-bold">${plan.price_monthly}</span>
+                  <span className="text-3xl font-bold">Rs {plan.price_monthly}</span>
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
                     /month
                   </span>
@@ -198,7 +198,7 @@ export default function SubscriptionPage() {
                   <tr key={invoice.id}>
                     <td className="py-3 font-medium">{invoice.id.slice(0, 8)}...</td>
                     <td className="py-3 text-zinc-500 dark:text-zinc-400">{new Date(invoice.period_start).toLocaleDateString()}</td>
-                    <td className="py-3 text-zinc-500 dark:text-zinc-400">${invoice.amount}</td>
+                    <td className="py-3 text-zinc-500 dark:text-zinc-400">Rs {invoice.amount}</td>
                     <td className="py-3">
                       <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
                         {invoice.status || 'Paid'}
@@ -234,7 +234,7 @@ export default function SubscriptionPage() {
             <div className="mb-6 space-y-4">
               <div className="rounded-lg bg-indigo-50 p-4 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800">
                 <p className="text-sm text-indigo-900 dark:text-indigo-100 font-medium">Total Amount</p>
-                <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">${selectedPlan.price_monthly}</p>
+                <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">Rs {selectedPlan.price_monthly}</p>
               </div>
 
               <div className="space-y-4">
