@@ -97,6 +97,33 @@ class UserService {
   }
 
   /**
+   * Get all-time usage metrics across all periods
+   * @param {string} userId
+   * @returns {Promise<object>} Usage object { messages_count, chats_count, sessions_count }
+   */
+  async getUserAllTimeUsage(userId) {
+    try {
+      const res = await db.pool.query(
+        'SELECT SUM(messages_count) as total_messages, SUM(chats_count) as total_chats, SUM(sessions_count) as total_sessions FROM usage WHERE user_id=$1',
+        [userId]
+      )
+      
+      if (res.rows.length) {
+        const r = res.rows[0]
+        return {
+          messages_count: Number(r.total_messages || 0),
+          chats_count: Number(r.total_chats || 0),
+          sessions_count: Number(r.total_sessions || 0)
+        }
+      }
+      return { messages_count: 0, chats_count: 0, sessions_count: 0 }
+    } catch (e) {
+      console.error('UserService.getUserAllTimeUsage failed:', e)
+      throw e
+    }
+  }
+
+  /**
    * Ensure a usage record exists for the given period
    * @param {string} userId 
    * @param {string} periodStart 

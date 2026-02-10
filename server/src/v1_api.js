@@ -3,6 +3,7 @@ const router = express.Router()
 const db = require('./db')
 const { ConnectionManagerInstance } = require('./connectionManager')
 const { checkMessageLimit } = require('./middleware/api_auth')
+const userService = require('./userService')
 
 // Send Message
 router.post('/messages', checkMessageLimit, async (req, res) => {
@@ -48,8 +49,10 @@ router.post('/messages', checkMessageLimit, async (req, res) => {
     const result = await ConnectionManagerInstance.sendMessage(session_id, jid, content)
 
     // 4. Increment Usage
-    if (req.usageId) {
-      await db.pool.query('UPDATE usage SET messages_count = messages_count + 1 WHERE id=$1', [req.usageId])
+    try {
+      await userService.incrementUsage(userId, 'messages')
+    } catch (e) {
+      console.error('Failed to increment API usage:', e)
     }
 
     res.json({ 
@@ -77,6 +80,64 @@ router.get('/sessions', async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: e.message })
+  }
+})
+
+// Get Plan and Usage Info
+router.get('/usage', async (req, res) => {
+  try {
+    const userId = req.user.sub
+    const plan = await userService.getUserPlan(userId)
+
+    if (!plan) {
+        return res.json({
+            plan: null,
+            usage: null,
+            remaining: null
+        })
+    }
+
+    const usage = await userService.getUserUsage(userId, plan.period_start)
+    const allTime = await userService.getUserAllTimeUsage(userId)
+
+    // Calculate remaining
+    // -1 means unlimited
+    const remaining = {
+        messages: plan.max_messages === -1 ? 'Unlimited' : Math.max(0, plan.max_messages - usage.messages_count),
+        chats: plan.max_chats === -1 ? 'Unlimited' : Math.max(0, plan.max_chats - usage.chats_count),
+        sessions: plan.max_sessions === -1 ? 'Unlimited' : Math.max(0, plan.max_sessions - usage.sessions_count),
+        agents: plan.max_agents === -1 ? 'Unlimited' : 'N/A' // Agents are usually hard limits, not consumptive
+    }
+
+    res.json({
+        plan: {
+            name: plan.plan_name,
+            status: plan.status,
+            period_start: plan.period_start,
+            period_end: plan.period_end,
+            limits: {
+                messages: plan.max_messages === -1 ? 'Unlimited' : plan.max_messages,
+                chats: plan.max_chats === -1 ? 'Unlimited' : plan.max_chats,
+                sessions: plan.max_sessions === -1 ? 'Unlimited' : plan.max_sessions,
+                agents: plan.max_agents === -1 ? 'Unlimited' : plan.max_agents
+            }
+        },
+        usage: {
+            messages: usage.messages_count,
+            chats: usage.chats_count,
+            sessions: usage.sessions_count
+        },
+        all_time: {
+            messages: allTime.messages_count,
+            chats: allTime.chats_count,
+            sessions: allTime.sessions_count
+        },
+        remaining
+    })
+
+  } catch (e) {
+    console.error('GET /usage failed:', e)
+    res.status(500).json({ error: 'Internal Server Error' })
   }
 })
 
