@@ -22,6 +22,27 @@ export function Navbar() {
     }
   }, []);
 
+      const googleTranslateElementInit = () => {
+        // @ts-ignore
+      new window.google.translate.TranslateElement(
+        {
+          pageLanguage: "en",
+          autoDisplay: false
+        },
+        "google_translate_element"
+      );
+    };
+    useEffect(() => {
+      var addScript = document.createElement("script");
+      addScript.setAttribute(
+        "src",
+        "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"
+      );
+      document.body.appendChild(addScript);
+      // @ts-ignore
+      window.googleTranslateElementInit = googleTranslateElementInit;
+    }, []);
+
   const navLinks = [
     { name: "Features", href: "/#features" },
     { name: "Pricing", href: "/#pricing" },
@@ -54,9 +75,12 @@ export function Navbar() {
               {link.name}
             </Link>
           ))}
+              
+
         </nav>
 
         <div className="hidden md:flex items-center gap-4">
+            <div id="google_translate_element"></div>
           {user ? (
             <Link
               href={user.role === 'admin' ? "/dashboard/admin" : "/dashboard/client"}

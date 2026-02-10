@@ -27,3 +27,11 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.goog-te-combo {
+  background-color: #ededed;
+  margin-top: 20px;
+}
+#google_translate_element{
+  margin: 10px;
+}

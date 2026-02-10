@@ -38,6 +38,8 @@ export default function Home() {
     fetchPlans();
   }, []);
 
+
+
   const fetchPlans = async () => {
     try {
       const res = await api.get('/public/plans');
