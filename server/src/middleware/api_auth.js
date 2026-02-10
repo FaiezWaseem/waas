@@ -44,7 +44,8 @@ const verifyApiKey = async (req, res, next) => {
     // Let's assume user must have a plan. If not, default to 0 limit.
     let maxMessages = 0
     if (subRes.rows.length) {
-      maxMessages = subRes.rows[0].max_messages
+      const val = subRes.rows[0].max_messages
+      maxMessages = val === null ? -1 : val
     } else {
       // Fallback to checking if they are on a free plan that isn't in subscriptions?
       // For now, strict check.
@@ -79,8 +80,10 @@ const verifyApiKey = async (req, res, next) => {
     req.user = { sub: userId, role: apiKey.role } // Compatible with existing auth structure
     req.apiKey = apiKey
     req.usageId = usageId // To increment later
-    req.planLimit = maxMessages
-    req.currentUsage = currentUsage
+    req.planLimit = Number(maxMessages)
+    req.currentUsage = Number(currentUsage)
+
+    console.log(`[API Limit Check] User: ${userId} | Plan Limit: ${req.planLimit} | Used: ${req.currentUsage} | Remaining: ${req.planLimit === -1 ? 'Unlimited' : req.planLimit - req.currentUsage}`)
 
     next()
   } catch (e) {
