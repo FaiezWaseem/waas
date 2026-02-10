@@ -459,7 +459,7 @@ class ConnectionManager {
       }catch(e){ console.error('messages.upsert handler error', e && e.message) }
     })
 
-
+    this.sessions.set(id, { sock, status: 'init', qr: null, userId, agentId: agentId || null })
   }
 
   async getChats(sessionId) {
