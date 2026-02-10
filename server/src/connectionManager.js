@@ -1,34 +1,24 @@
 const { Boom } = require('@hapi/boom')
 const { v4: uuidv4 } = require('uuid')
+const userService = require('./userService')
 
 // helper: reserve session slot (increment usage)
 async function reserveSessionSlot(userId){
   try{
-    const db = require('./db')
-    const subRes = await db.pool.query('SELECT s.period_start,s.period_end,p.max_sessions FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[userId])
-    console.log(subRes)
-    if (!subRes.rows || !subRes.rows.length) {
+    const sub = await userService.getUserPlan(userId)
+    if (!sub) {
         console.log(`[LimitCheck] User ${userId} No Subscription found`)
-        return true // Default to allow if no sub? Or block? Original code allowed.
+        return true 
     }
 
-    const sub = subRes.rows[0]
-    if (!sub.max_sessions) return true // Unlimited
+    if (sub.max_sessions === -1) return true // Unlimited
 
     // Ensure usage row exists
-    let usageRes = await db.pool.query('SELECT id FROM usage WHERE user_id=$1 AND period_start=$2', [userId, sub.period_start])
-    let usageId
-    if (!usageRes.rows || !usageRes.rows.length) {
-        usageId = uuidv4()
-        // Try insert, ignore if conflict (though uuid shouldn't conflict, race on period_start might duplicate? 
-        // usage table has no unique constraint on (user_id, period_start) in schema but logically should.
-        // Schema: id PK. 
-        await db.pool.query('INSERT INTO usage(id,user_id,period_start,period_end,messages_count,chats_count,sessions_count,created_at) VALUES($1,$2,$3,$4,0,0,0,CURRENT_TIMESTAMP)', [usageId, userId, sub.period_start, sub.period_end])
-    } else {
-        usageId = usageRes.rows[0].id
-    }
+    const usage = await userService.ensureUsageRecord(userId, sub.period_start, sub.period_end)
+    const usageId = usage.id
 
     // 1. Check concurrent sessions limit from sessions table (Active Sessions)
+    const db = require('./db')
     const sessionsCountRes = await db.pool.query('SELECT count(*) as count FROM sessions WHERE user_id=$1', [userId])
     // Handle different return types (SQLite/MySQL might return string or number)
     const activeSessions = parseInt(sessionsCountRes.rows[0].count)
@@ -39,16 +29,13 @@ async function reserveSessionSlot(userId){
     }
 
     // 2. Increment usage counter (Total Sessions Created) - purely for analytics/tracking
-    await db.pool.query('UPDATE usage SET sessions_count = sessions_count + 1 WHERE id=$1', [usageId])
+    await userService.incrementUsage(userId, 'sessions')
     
     console.log(`[LimitCheck] Reserved slot for user ${userId}.`)
     return true
 
   }catch(e){ 
       console.error('session reservation failed', e && e.message) 
-      // If error (e.g. DB down), strictly we should fail? Or allow?
-      // For safety of business logic, fail? But original code allowed on error.
-      // Let's return false to be safe if we can't verify.
       return false 
   }
 }
@@ -56,18 +43,13 @@ async function reserveSessionSlot(userId){
 // helper: rollback session slot (decrement usage)
 async function rollbackSessionSlot(userId){
     try {
-        const db = require('./db')
-        // We need to find the current usage row again... simpler to just decrement latest active usage
-        const subRes = await db.pool.query('SELECT period_start FROM subscriptions WHERE user_id=$1 ORDER BY period_start DESC LIMIT 1',[userId])
-        if (subRes.rows && subRes.rows.length) {
-             const periodStart = subRes.rows[0].period_start
-             await db.pool.query('UPDATE usage SET sessions_count = sessions_count - 1 WHERE user_id=$1 AND period_start=$2', [userId, periodStart])
-             console.log(`[LimitCheck] Rolled back slot for user ${userId}`)
-        }
+        await userService.incrementUsage(userId, 'sessions', -1)
+        console.log(`[LimitCheck] Rolled back slot for user ${userId}`)
     } catch(e) {
         console.error('session rollback failed', e)
     }
 }
+
 
 class ConnectionManager {
   constructor() {
@@ -362,64 +344,38 @@ class ConnectionManager {
 
         // enforce plan usage and track usage
         try{
-          const db3 = require('./db')
-          const subRes = await db3.pool.query('SELECT s.id,s.plan_id,s.period_start,s.period_end,p.max_messages,p.max_chats FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id WHERE s.user_id=$1 ORDER BY s.period_start DESC LIMIT 1',[userId])
-          if (subRes.rows && subRes.rows.length){
-            const subRow = subRes.rows[0]
+          const sub = await userService.getUserPlan(userId)
+          if (sub){
             // ensure usage row
-            const uRes = await db3.pool.query('SELECT id,messages_count,chats_count,period_start FROM usage WHERE user_id=$1 AND period_start=$2',[userId,subRow.period_start])
-            let usageRow = uRes.rows && uRes.rows[0]
-            if (!usageRow){
-              const usageId = require('uuid').v4()
-              await db3.pool.query('INSERT INTO usage(id,user_id,period_start,period_end,messages_count,chats_count,created_at) VALUES($1,$2,$3,$4,0,0,CURRENT_TIMESTAMP)',[usageId,userId,subRow.period_start,subRow.period_end])
-              const newU = await db3.pool.query('SELECT id,messages_count,chats_count,period_start FROM usage WHERE user_id=$1 AND period_start=$2',[userId,subRow.period_start])
-              usageRow = newU.rows && newU.rows[0]
-            }
-
-            // increment messages
-            // We should only increment on OUTGOING messages (AI replies), but here we are processing INCOMING.
-            // However, we need to check limits BEFORE processing.
-            // If the model is "pay per message sent by AI", we count later.
-            // If "pay per interaction" (incoming + outgoing), we count here.
-            // Usually, SAAS charges for AI responses or total messages processed.
-            // Let's assume we charge for AI REPLIES. So we shouldn't increment here, but we should CHECK limit here.
-            
-            // Fix: Don't increment here. Just check.
-            // But wait, existing logic increments here. 
-            // If we change it, we might break "pay per incoming" model if that was intended.
-            // The user says "message ai auto reply are not considered".
-            // This implies the current logic counts INCOMING messages as usage?
-            // Line 380: UPDATE usage SET messages_count = messages_count + 1
-            // This increments for every INCOMING message that triggers the agent.
-            
-            // If the user wants to count AI replies, we should increment AFTER sending reply.
-            // Let's remove the increment here and move it to after ai.chatCompletion success.
-            // AND we still need to check limit here to prevent processing if quota full.
-
-            const u2 = await db3.pool.query('SELECT messages_count FROM usage WHERE id=$1',[usageRow.id])
-            const used = (u2.rows && u2.rows[0]) ? Number(u2.rows[0].messages_count) : 0
+            const usage = await userService.ensureUsageRecord(userId, sub.period_start, sub.period_end)
+            const used = usage.messages_count
             
             // Check limit
-            const maxMsg = subRow.max_messages === null ? -1 : Number(subRow.max_messages)
+            const maxMsg = sub.max_messages
             if (maxMsg !== -1 && used >= maxMsg){
               console.error('user over messages quota, not replying')
-              await db3.pool.query('UPDATE usage SET last_alerted_at=CURRENT_TIMESTAMP WHERE id=$1',[usageRow.id])
+              // update last alerted if needed
+              await userService.updateLastAlerted(usage.id)
+              
               // notify user via webhooks if registered
               try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'messages', used, limit: maxMsg }) }catch(e){ console.error('notify failed', e && e.message) }
               return
             }
 
             // track chats (unique remoteJid)
-            if (subRow.max_chats){
-              const chatExists = await db3.pool.query('SELECT 1 FROM messages WHERE session_id=$1 AND to_jid=$2 AND created_at BETWEEN $3 AND $4 LIMIT 1',[id,msg.key.remoteJid,subRow.period_start,subRow.period_end])
+            if (sub.max_chats !== -1){
+              const db3 = require('./db')
+              const chatExists = await db3.pool.query('SELECT 1 FROM messages WHERE session_id=$1 AND to_jid=$2 AND created_at BETWEEN $3 AND $4 LIMIT 1',[id,msg.key.remoteJid,sub.period_start,sub.period_end])
               if (!chatExists.rows || !chatExists.rows.length){
-                await db3.pool.query('UPDATE usage SET chats_count = chats_count + 1 WHERE id=$1',[usageRow.id])
-                const u3 = await db3.pool.query('SELECT chats_count FROM usage WHERE id=$1',[usageRow.id])
-                const chatsUsed = (u3.rows && u3.rows[0]) ? u3.rows[0].chats_count : 0
-                if (subRow.max_chats && chatsUsed > subRow.max_chats){
+                await userService.incrementUsage(userId, 'chats')
+                
+                // Check chat limit
+                const u3 = await userService.getUserUsage(userId, sub.period_start)
+                const chatsUsed = u3.chats_count
+                if (sub.max_chats !== -1 && chatsUsed > sub.max_chats){
                   console.error('user over chats quota, not replying')
-                  await db3.pool.query('UPDATE usage SET last_alerted_at=CURRENT_TIMESTAMP WHERE id=$1',[usageRow.id])
-                  try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'chats', used:chatsUsed, limit: subRow.max_chats }) }catch(e){ console.error('notify failed', e && e.message) }
+                  await userService.updateLastAlerted(usage.id)
+                  try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'chats', used:chatsUsed, limit: sub.max_chats }) }catch(e){ console.error('notify failed', e && e.message) }
                   return
                 }
               }
@@ -470,20 +426,10 @@ class ConnectionManager {
               await db3.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)',[mid2,id,'out',msg.key.remoteJid,reply,JSON.stringify({ reply })])
               
               // Increment usage here for the outgoing AI reply
-              // Re-fetch usageRow.id if needed, or assume we have it from closure scope?
-              // usageRow is defined in the outer scope, but inside a try block.
-              // We need to ensure we have access to it or re-fetch.
-              // Since the outer try block wraps the whole thing, we might not have access if we are in a different scope?
-              // Actually, usageRow is defined inside the 'enforce plan usage' block which is separate.
-              // We need to fetch it again or pass it down.
-              // Simplest is to fetch active usage again for this user.
-              
-              const subRes = await db3.pool.query('SELECT period_start FROM subscriptions WHERE user_id=$1 AND status=\'active\' ORDER BY period_start DESC LIMIT 1', [userId])
-              if (subRes.rows.length) {
-                 const periodStart = subRes.rows[0].period_start
-                 // Update usage
-                 // Note: we don't need to fetch ID if we match by user_id and period_start
-                 await db3.pool.query('UPDATE usage SET messages_count = messages_count + 1 WHERE user_id=$1 AND period_start=$2', [userId, periodStart])
+              try {
+                  await userService.incrementUsage(userId, 'messages')
+              } catch (err) {
+                  console.error(`[AI Usage] Failed to increment usage for user ${userId}:`, err)
               }
 
             }catch(e){ console.error('persist outgoing failed', e && e.message) }
