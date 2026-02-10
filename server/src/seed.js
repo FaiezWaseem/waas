@@ -57,20 +57,22 @@ async function seed() {
           console.log('Subscribing default user to "plan_basic"...')
           const planId = 'plan_basic'
           const subId = uuidv4()
-          const start = new Date().toISOString()
+          // MySQL requires 'YYYY-MM-DD HH:MM:SS' format
+          const start = new Date().toISOString().slice(0, 19).replace('T', ' ')
           const end = new Date()
           end.setMonth(end.getMonth() + 1)
+          const endStr = end.toISOString().slice(0, 19).replace('T', ' ')
           
           await db.pool.query(
               'INSERT INTO subscriptions(id, user_id, plan_id, period_start, period_end, created_at) VALUES($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)',
-              [subId, id, planId, start, end.toISOString()]
+              [subId, id, planId, start, endStr]
           )
           
           // Create usage record
           const usageId = uuidv4()
           await db.pool.query(
               'INSERT INTO usage(id, user_id, period_start, period_end, messages_count, chats_count, created_at) VALUES($1, $2, $3, $4, 0, 0, CURRENT_TIMESTAMP)',
-              [usageId, id, start, end.toISOString()]
+              [usageId, id, start, endStr]
           )
           console.log('Default user subscribed to Basic plan.')
       }
@@ -114,7 +116,7 @@ async function seed() {
           read_time: "5 min read",
           author_name: "Faiez",
           author_role: "Founder & CEO",
-          published_at: "2026-02-08T10:00:00Z"
+          published_at: "2026-02-08T10:00:00ZZ"
         },
         {
           title: "How to Build a WhatsApp Chatbot in 5 Minutes",
@@ -154,7 +156,7 @@ async function seed() {
           read_time: "8 min read",
           author_name: "Team WaaS",
           author_role: "Developer Relations",
-          published_at: "2026-02-01T10:00:00Z"
+          published_at: "2026-02-01 10:00:00"
         },
         {
           title: "Best Practices for WhatsApp Marketing Campaigns",
@@ -179,7 +181,7 @@ async function seed() {
           read_time: "6 min read",
           author_name: "Marketing Team",
           author_role: "Growth",
-          published_at: "2026-01-25T10:00:00Z"
+          published_at: "2026-01-25 10:00:00"
         }
       ]
 
