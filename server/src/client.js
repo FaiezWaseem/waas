@@ -1,73 +1,74 @@
 const express = require('express')
 const router = express.Router()
 const db = require('./db')
+const userService = require('./userService')
 
 // Get client dashboard stats
 router.get('/stats', async (req, res) => {
   try {
     const userId = req.user.sub
     
-    // 1. Get total messages count (for current period)
-    const usageRes = await db.pool.query(
-      `SELECT messages_count 
-       FROM usage 
-       WHERE user_id = $1 
-       ORDER BY period_start DESC LIMIT 1`,
-      [userId]
-    )
-    
-    // Default to 0 if no usage record found
-    const messagesCount = usageRes.rows.length > 0 ? parseInt(usageRes.rows[0].messages_count) : 0
+    // 1. Get Plan Info (Max Limits) using UserService
+    const plan = await userService.getUserPlan(userId)
 
-    // 2. Get active agents count
+    let maxMessages = 0
+    let maxSessions = 0
+    let periodStart = null
+
+    if (plan) {
+      maxMessages = plan.max_messages === -1 ? Infinity : plan.max_messages
+      maxSessions = plan.max_sessions === -1 ? Infinity : plan.max_sessions
+      periodStart = plan.period_start
+    }
+
+    // 2. Get Usage (Current Period) using UserService
+    // If no plan, we assume periodStart is null -> defaults to latest or creates one
+    // But better to pass null if no plan
+    const usage = await userService.getUserUsage(userId, periodStart)
+    const messagesSent = usage.messages_count
+
+    // 3. Get Active Agents Count (still direct query as it's not in usage table yet or usage table tracks total created?)
+    // Usage table tracks things that CONSUME quota. 
+    // Agents are usually a "max count" limit, not a "consumed over time" limit (unless it's "agents created per month").
+    // Let's assume agents are a "current state" limit.
     const agents = await db.pool.query(
       'SELECT COUNT(*) as count FROM agents WHERE user_id = $1',
       [userId]
     )
     const agentsCount = parseInt(agents.rows[0].count)
 
-    // 3. Get active sessions count
-    const sessions = await db.pool.query(
+    // 4. Get Active Sessions Count
+    // Similarly, sessions are a concurrent limit usually.
+    // UserService getUserUsage returns sessions_count which might be "cumulative sessions created this period" OR "concurrent".
+    // Core memory says: "Session limits are enforced using an atomic `sessions_count` in the `usage` table... increments on creation... no refund"
+    // So usage.sessions_count is "Total Sessions Created This Period".
+    // But the dashboard likely wants "Currently Active Sessions" vs "Max Concurrent Allowed"?
+    // OR "Sessions Created This Month" vs "Max Sessions Per Month"?
+    // The UI says "Active Sessions".
+    // Let's stick to the previous logic for "Active Sessions" (count from sessions table) 
+    // BUT use usage for "Credits Remaining" calculations if that was the intention.
+    // Wait, previous code queried `sessions` table for active count.
+    const sessionsRes = await db.pool.query(
       'SELECT COUNT(*) as count FROM sessions WHERE user_id = $1',
       [userId]
     )
-    console.log('[DEBUG] sessions count query result:', sessions.rows)
-    const activeSessionsCount = sessions.rows && sessions.rows[0] ? parseInt(sessions.rows[0].count || 0) : 0
+    const activeSessionsCount = sessionsRes.rows && sessionsRes.rows[0] ? parseInt(sessionsRes.rows[0].count || 0) : 0
 
-    // 4. Get subscription/plan info for credits
-    // Find active subscription
-    const sub = await db.pool.query(
-      `SELECT p.max_messages, p.max_sessions 
-       FROM subscriptions s 
-       JOIN plans p ON s.plan_id = p.id 
-       WHERE s.user_id = $1 AND s.status = 'active' 
-       ORDER BY s.period_start DESC LIMIT 1`,
-      [userId]
-    )
-    
+    // 5. Calculate Credits Remaining
     let creditsRemaining = 0
-    let maxSessions = 0
-    if (sub.rows.length > 0) {
-      const maxMessages = sub.rows[0].max_messages
-      maxSessions = sub.rows[0].max_sessions
-      // For now, simple calculation: max - total. 
-      // In a real system, we'd filter messages by billing period.
-      // Assuming 'credits' means 'messages remaining'
-      creditsRemaining = Math.max(0, maxMessages - messagesCount)
+    if (maxMessages === Infinity) {
+        creditsRemaining = 999999 // Or some indicator for unlimited
     } else {
-      // If no active subscription, check if they are on a free/default plan or have 0 credits
-      // Maybe check for a default plan if none exists?
-      // For now, 0.
-      creditsRemaining = 0
+        creditsRemaining = Math.max(0, maxMessages - messagesSent)
     }
 
     res.json({
-      messagesSent: messagesCount,
+      messagesSent,
       creditsRemaining,
       activeAgents: agentsCount,
       sessions: {
         active: activeSessionsCount,
-        max: maxSessions
+        max: maxSessions === Infinity ? 'Unlimited' : maxSessions
       }
     })
   } catch (e) {
