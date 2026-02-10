@@ -408,13 +408,6 @@ export default function ConnectAgentPage() {
                     </ol>
                   </div>
                   
-                  {/* Manual trigger for testing/demo if polling is slow */}
-                  <button
-                    onClick={() => setStep('config')}
-                    className="w-full text-xs text-zinc-400 hover:text-indigo-600 underline"
-                  >
-                    Skip (Dev Mode)
-                  </button>
                 </div>
               </div>
             )}
