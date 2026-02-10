@@ -72,7 +72,7 @@ class ConnectionManager {
     // enforce session quota if userId provided
     if (userId){
       const ok = await reserveSessionSlot(userId)
-      if (!ok) throw new Error('session limit reached for your plan')
+      if (!ok) return console.warn('session limit reached for your plan')
     }
 
 
