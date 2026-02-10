@@ -31,7 +31,7 @@ class UserService {
                p.id as plan_id, p.name as plan_name, p.max_messages, p.max_chats, p.max_agents, p.max_sessions
         FROM subscriptions s 
         LEFT JOIN plans p ON p.id = s.plan_id 
-        WHERE s.user_id = $1 
+        WHERE s.user_id = $1 AND s.status IN ('active', 'trialing')
         ORDER BY s.period_start DESC 
         LIMIT 1
       `

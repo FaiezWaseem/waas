@@ -345,6 +345,12 @@ class ConnectionManager {
         // enforce plan usage and track usage
         try{
           const sub = await userService.getUserPlan(userId)
+          
+          if (!sub) {
+             console.log(`[LimitCheck] User ${userId} has no active plan. Blocking AI reply.`)
+             return
+          }
+
           if (sub){
             // ensure usage row
             const usage = await userService.ensureUsageRecord(userId, sub.period_start, sub.period_end)
