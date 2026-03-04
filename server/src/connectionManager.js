@@ -3,12 +3,12 @@ const { v4: uuidv4 } = require('uuid')
 const userService = require('./userService')
 
 // helper: reserve session slot (increment usage)
-async function reserveSessionSlot(userId){
-  try{
+async function reserveSessionSlot(userId) {
+  try {
     const sub = await userService.getUserPlan(userId)
     if (!sub) {
-        console.log(`[LimitCheck] User ${userId} No Subscription found`)
-        return true 
+      console.log(`[LimitCheck] User ${userId} No Subscription found`)
+      return true
     }
 
     if (sub.max_sessions === -1) return true // Unlimited
@@ -24,30 +24,30 @@ async function reserveSessionSlot(userId){
     const activeSessions = parseInt(sessionsCountRes.rows[0].count)
 
     if (activeSessions >= sub.max_sessions) {
-         console.log(`[LimitCheck] User ${userId} concurrent session limit reached (${activeSessions}/${sub.max_sessions}).`)
-         return false
+      console.log(`[LimitCheck] User ${userId} concurrent session limit reached (${activeSessions}/${sub.max_sessions}).`)
+      return false
     }
 
     // 2. Increment usage counter (Total Sessions Created) - purely for analytics/tracking
     await userService.incrementUsage(userId, 'sessions')
-    
+
     console.log(`[LimitCheck] Reserved slot for user ${userId}.`)
     return true
 
-  }catch(e){ 
-      console.error('session reservation failed', e && e.message) 
-      return false 
+  } catch (e) {
+    console.error('session reservation failed', e && e.message)
+    return false
   }
 }
 
 // helper: rollback session slot (decrement usage)
-async function rollbackSessionSlot(userId){
-    try {
-        await userService.incrementUsage(userId, 'sessions', -1)
-        console.log(`[LimitCheck] Rolled back slot for user ${userId}`)
-    } catch(e) {
-        console.error('session rollback failed', e)
-    }
+async function rollbackSessionSlot(userId) {
+  try {
+    await userService.incrementUsage(userId, 'sessions', -1)
+    console.log(`[LimitCheck] Rolled back slot for user ${userId}`)
+  } catch (e) {
+    console.error('session rollback failed', e)
+  }
 }
 
 
@@ -68,22 +68,22 @@ class ConnectionManager {
     })
   }
 
-  async createSession(userId, agentId){
+  async createSession(userId, agentId) {
     // enforce session quota if userId provided
-    if (userId){
+    if (userId) {
       const ok = await reserveSessionSlot(userId)
       if (!ok) return console.warn('session limit reached for your plan')
     }
 
 
     const id = uuidv4()
-    
+
     // persist in db first
-    try{
+    try {
       const db = require('./db')
-      await db.pool.query('INSERT INTO sessions(id,user_id,agent_id,status,qr,auth_path) VALUES($1,$2,$3,$4,$5,$6)',[id,userId,agentId||null,'init',null,`./sessions/${id}`])
-    }catch(e){ 
-      console.error('db save failed',e.message) 
+      await db.pool.query('INSERT INTO sessions(id,user_id,agent_id,status,qr,auth_path) VALUES($1,$2,$3,$4,$5,$6)', [id, userId, agentId || null, 'init', null, `./sessions/${id}`])
+    } catch (e) {
+      console.error('db save failed', e.message)
       if (userId) await rollbackSessionSlot(userId)
       throw e
     }
@@ -109,7 +109,7 @@ class ConnectionManager {
     // 2. Delete from DB
     try {
       const db = require('./db')
-      
+
       // Get agent_id before deleting session
       const sRow = await db.pool.query('SELECT agent_id FROM sessions WHERE id=$1', [id])
       const agentId = sRow.rows && sRow.rows.length ? sRow.rows[0].agent_id : null
@@ -118,8 +118,8 @@ class ConnectionManager {
 
       // Delete associated agent if exists
       if (agentId) {
-         await db.pool.query('DELETE FROM agents WHERE id=$1', [agentId])
-         console.log(`Deleted associated agent ${agentId} for session ${id}`)
+        await db.pool.query('DELETE FROM agents WHERE id=$1', [agentId])
+        console.log(`Deleted associated agent ${agentId} for session ${id}`)
       }
     } catch (e) {
       console.error(`Error deleting session ${id} from DB`, e)
@@ -157,57 +157,58 @@ class ConnectionManager {
     // Force DB update immediately to avoid race condition with UI
     console.log(`Session ${id} manual logout. Forcing init state...`)
     try {
-        const db = require('./db')
-        await db.pool.query('UPDATE sessions SET status=$1, qr=$2, phone_number=$3, contact_name=$4 WHERE id=$5', 
-            ['init', null, null, null, id])
-        
-        if (s) {
-            s.status = 'init'
-            s.qr = null
-            this.sessions.set(id, s)
+      const db = require('./db')
+      await db.pool.query('UPDATE sessions SET status=$1, qr=$2, phone_number=$3, contact_name=$4 WHERE id=$5',
+        ['init', null, null, null, id])
 
-            // If logout failed (no event triggered), manually restart
-            if (!logoutSuccess && s.userId) {
-                console.log(`Logout failed/skipped, manually restarting session ${id}...`)
-                const fs = require('fs')
-                const path = require('path')
-                const sessionDir = path.resolve(__dirname, `../sessions/${id}`)
-                if (fs.existsSync(sessionDir)) {
-                    fs.rmSync(sessionDir, { recursive: true, force: true })
-                }
-                this._initSocket(id, s.userId, s.agentId, s.aiEnabled)
-            }
+      if (s) {
+        s.status = 'init'
+        s.qr = null
+        this.sessions.set(id, s)
+
+        // If logout failed (no event triggered), manually restart
+        if (!logoutSuccess && s.userId) {
+          console.log(`Logout failed/skipped, manually restarting session ${id}...`)
+          const fs = require('fs')
+          const path = require('path')
+          const sessionDir = path.resolve(__dirname, `../sessions/${id}`)
+          if (fs.existsSync(sessionDir)) {
+            fs.rmSync(sessionDir, { recursive: true, force: true })
+          }
+          this._initSocket(id, s.userId, s.agentId, s.aiEnabled)
         }
-    } catch(e) { 
-        console.error('logout reset failed', e) 
+      }
+    } catch (e) {
+      console.error('logout reset failed', e)
     }
   }
 
   async restoreSessions() {
     try {
-        const db = require('./db')
-        const res = await db.pool.query("SELECT * FROM sessions")
-        for (const session of res.rows) {
-            // Only restore if we don't already have it in memory
-            if (!this.sessions.has(session.id)) {
-                console.log(`Restoring session ${session.id}`)
-                // We don't await this so they restore in parallel
-                this._initSocket(session.id, session.user_id, session.agent_id, session.ai_enabled).catch(err => {
-                    console.error(`Failed to restore session ${session.id}:`, err)
-                })
-            }
+      const db = require('./db')
+      const res = await db.pool.query("SELECT * FROM sessions")
+      for (const session of res.rows) {
+        // Only restore if we don't already have it in memory
+        if (!this.sessions.has(session.id)) {
+          console.log(`Restoring session ${session.id}`)
+          // We don't await this so they restore in parallel
+          this._initSocket(session.id, session.user_id, session.agent_id, session.ai_enabled).catch(err => {
+            console.error(`Failed to restore session ${session.id}:`, err)
+          })
         }
+      }
     } catch (e) {
-        console.error('Restore sessions failed', e)
+      console.error('Restore sessions failed', e)
     }
   }
 
   async _initSocket(id, userId, agentId, aiEnabled = 1) {
-    const { default: makeWASocket, useMultiFileAuthState, Browsers, DisconnectReason } = await import('@whiskeysockets/baileys')
+    const { default: makeWASocket, useMultiFileAuthState, Browsers, DisconnectReason, fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys')
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${id}`)
-
+    const { version } = await fetchLatestBaileysVersion();
     const sock = makeWASocket({
       auth: state,
+      version,
       browser: Browsers.ubuntu('WAAS AI'),
       printQRInTerminal: false,
       connectTimeoutMs: 60000,
@@ -216,56 +217,56 @@ class ConnectionManager {
 
     this.sessions.set(id, { sock, status: 'connecting', userId, agentId, aiEnabled: !!aiEnabled })
 
-    sock.ev.on('connection.update', async(update) => {
+    sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update
       console.log(`Session ${id} update: connection=${connection}, qr=${qr ? 'YES' : 'NO'}`)
 
       if (connection === 'close') {
-          const statusCode = (lastDisconnect.error)?.output?.statusCode
-          const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-          console.log(`Session ${id} closed. Reason: ${statusCode}, Reconnect: ${shouldReconnect}`)
-          if (shouldReconnect) {
-             // add a small delay to avoid tight loops
-             setTimeout(() => this._initSocket(id, userId, agentId, this.sessions.get(id)?.aiEnabled), 3000)
-          } else {
-             // if logged out, don't delete the session, just reset it to init state
-             console.log(`Session ${id} logged out. Resetting to init state...`)
-             try {
-                // 1. clear auth folder
-                const fs = require('fs')
-                const path = require('path')
-                const sessionDir = path.resolve(__dirname, `../sessions/${id}`)
-                if (fs.existsSync(sessionDir)) {
-                    fs.rmSync(sessionDir, { recursive: true, force: true })
-                }
-                
-                // 2. update DB
-                const db = require('./db')
-                await db.pool.query('UPDATE sessions SET status=$1, qr=$2, phone_number=$3, contact_name=$4 WHERE id=$5', 
-                    ['init', null, null, null, id])
-                
-                // 3. clear memory
-                const s = this.sessions.get(id)
-                if(s) { s.status = 'init'; s.qr = null; this.sessions.set(id, s); }
+        const statusCode = (lastDisconnect.error)?.output?.statusCode
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+        console.log(`Session ${id} closed. Reason: ${statusCode}, Reconnect: ${shouldReconnect}`)
+        if (shouldReconnect) {
+          // add a small delay to avoid tight loops
+          setTimeout(() => this._initSocket(id, userId, agentId, this.sessions.get(id)?.aiEnabled), 3000)
+        } else {
+          // if logged out, don't delete the session, just reset it to init state
+          console.log(`Session ${id} logged out. Resetting to init state...`)
+          try {
+            // 1. clear auth folder
+            const fs = require('fs')
+            const path = require('path')
+            const sessionDir = path.resolve(__dirname, `../sessions/${id}`)
+            if (fs.existsSync(sessionDir)) {
+              fs.rmSync(sessionDir, { recursive: true, force: true })
+            }
 
-                // 4. restart socket to get new QR
-                this._initSocket(id, userId, agentId, this.sessions.get(id)?.aiEnabled)
-             } catch(e) { console.error('logout reset failed', e) }
-          }
+            // 2. update DB
+            const db = require('./db')
+            await db.pool.query('UPDATE sessions SET status=$1, qr=$2, phone_number=$3, contact_name=$4 WHERE id=$5',
+              ['init', null, null, null, id])
+
+            // 3. clear memory
+            const s = this.sessions.get(id)
+            if (s) { s.status = 'init'; s.qr = null; this.sessions.set(id, s); }
+
+            // 4. restart socket to get new QR
+            this._initSocket(id, userId, agentId, this.sessions.get(id)?.aiEnabled)
+          } catch (e) { console.error('logout reset failed', e) }
+        }
       }
 
       if (connection === 'open') {
         console.log(`✅ Session ${id} CONNECTED!`)
         // Update session details (phone number, name)
         try {
-           const user = sock.user
-           if (user) {
-             const phoneNumber = user.id.split(':')[0]
-             const name = user.name || user.notify || phoneNumber
-             const db = require('./db')
-             db.pool.query('UPDATE sessions SET phone_number=$1, contact_name=$2, status=$3, last_active=CURRENT_TIMESTAMP WHERE id=$4', 
-               [phoneNumber, name, 'active', id]).catch(console.error)
-           }
+          const user = sock.user
+          if (user) {
+            const phoneNumber = user.id.split(':')[0]
+            const name = user.name || user.notify || phoneNumber
+            const db = require('./db')
+            db.pool.query('UPDATE sessions SET phone_number=$1, contact_name=$2, status=$3, last_active=CURRENT_TIMESTAMP WHERE id=$4',
+              [phoneNumber, name, 'active', id]).catch(console.error)
+          }
         } catch (e) {
           console.error(`Error updating session details for ${id}`, e)
         }
@@ -284,26 +285,26 @@ class ConnectionManager {
 
       // auto save
       saveCreds().catch(console.error)
-      
+
       // update db status
       if (connection) {
-         const db = require('./db')
-         db.pool.query('UPDATE sessions SET status=$1 WHERE id=$2', [connection, id]).catch(console.error)
-         if (this.io) {
-           this.io.to(`session:${id}`).emit('status', { sessionId: id, status: connection })
-         }
+        const db = require('./db')
+        db.pool.query('UPDATE sessions SET status=$1 WHERE id=$2', [connection, id]).catch(console.error)
+        if (this.io) {
+          this.io.to(`session:${id}`).emit('status', { sessionId: id, status: connection })
+        }
       }
       if (qr) {
-         const db = require('./db')
-         db.pool.query('UPDATE sessions SET qr=$1 WHERE id=$2', [qr, id]).catch(console.error)
-         if (this.io) {
-           this.io.to(`session:${id}`).emit('qr', { sessionId: id, qr })
-         }
+        const db = require('./db')
+        db.pool.query('UPDATE sessions SET qr=$1 WHERE id=$2', [qr, id]).catch(console.error)
+        if (this.io) {
+          this.io.to(`session:${id}`).emit('qr', { sessionId: id, qr })
+        }
       }
     })
 
     sock.ev.on('messages.upsert', async (m) => {
-      try{
+      try {
         if (!m || !m.messages || !m.messages.length) return
         const msg = m.messages[0]
         if (!msg.message) return
@@ -319,20 +320,20 @@ class ConnectionManager {
         console.log('incoming text for session', id, 'from', msg.key.remoteJid, ':', text)
 
         // persist incoming message
-        try{
+        try {
           const db = require('./db')
           const mid = require('uuid').v4()
-          await db.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)',[mid,id,'in',msg.key.remoteJid,text,JSON.stringify(msg)])
-        }catch(e){ console.error('persist message failed', e && e.message) }
+          await db.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid, id, 'in', msg.key.remoteJid, text, JSON.stringify(msg)])
+        } catch (e) { console.error('persist message failed', e && e.message) }
 
         // find bound agent for this session
         // use passed agentId or fetch fresh from DB/memory
         const s = this.sessions.get(id) || {}
-        
+
         // CHECK AI ENABLED STATUS
         if (s.aiEnabled === false) {
-           console.log(`Session ${id} AI disabled. Ignoring message.`)
-           return
+          console.log(`Session ${id} AI disabled. Ignoring message.`)
+          return
         }
 
         // prioritize s.agentId (which tracks live updates) over the closure variable agentId
@@ -343,55 +344,55 @@ class ConnectionManager {
         if (!currentAgentId) return
 
         // enforce plan usage and track usage
-        try{
+        try {
           const sub = await userService.getUserPlan(userId)
-          
+
           if (!sub) {
-             console.log(`[LimitCheck] User ${userId} has no active plan. Blocking AI reply.`)
-             return
+            console.log(`[LimitCheck] User ${userId} has no active plan. Blocking AI reply.`)
+            return
           }
 
-          if (sub){
+          if (sub) {
             // ensure usage row
             const usage = await userService.ensureUsageRecord(userId, sub.period_start, sub.period_end)
             const used = usage.messages_count
-            
+
             // Check limit
             const maxMsg = sub.max_messages
-            if (maxMsg !== -1 && used >= maxMsg){
+            if (maxMsg !== -1 && used >= maxMsg) {
               console.error('user over messages quota, not replying')
               // update last alerted if needed
               await userService.updateLastAlerted(usage.id)
-              
+
               // notify user via webhooks if registered
-              try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'messages', used, limit: maxMsg }) }catch(e){ console.error('notify failed', e && e.message) }
+              try { const alerts = require('./alerts'); await alerts.notifyUser(userId, { type: 'quota_exceeded', kind: 'messages', used, limit: maxMsg }) } catch (e) { console.error('notify failed', e && e.message) }
               return
             }
 
             // track chats (unique remoteJid)
-            if (sub.max_chats !== -1){
+            if (sub.max_chats !== -1) {
               const db3 = require('./db')
-              const chatExists = await db3.pool.query('SELECT 1 FROM messages WHERE session_id=$1 AND to_jid=$2 AND created_at BETWEEN $3 AND $4 LIMIT 1',[id,msg.key.remoteJid,sub.period_start,sub.period_end])
-              if (!chatExists.rows || !chatExists.rows.length){
+              const chatExists = await db3.pool.query('SELECT 1 FROM messages WHERE session_id=$1 AND to_jid=$2 AND created_at BETWEEN $3 AND $4 LIMIT 1', [id, msg.key.remoteJid, sub.period_start, sub.period_end])
+              if (!chatExists.rows || !chatExists.rows.length) {
                 await userService.incrementUsage(userId, 'chats')
-                
+
                 // Check chat limit
                 const u3 = await userService.getUserUsage(userId, sub.period_start)
                 const chatsUsed = u3.chats_count
-                if (sub.max_chats !== -1 && chatsUsed > sub.max_chats){
+                if (sub.max_chats !== -1 && chatsUsed > sub.max_chats) {
                   console.error('user over chats quota, not replying')
                   await userService.updateLastAlerted(usage.id)
-                  try{ const alerts = require('./alerts'); await alerts.notifyUser(userId,{ type:'quota_exceeded', kind:'chats', used:chatsUsed, limit: sub.max_chats }) }catch(e){ console.error('notify failed', e && e.message) }
+                  try { const alerts = require('./alerts'); await alerts.notifyUser(userId, { type: 'quota_exceeded', kind: 'chats', used: chatsUsed, limit: sub.max_chats }) } catch (e) { console.error('notify failed', e && e.message) }
                   return
                 }
               }
             }
           }
-        }catch(e){ console.error('usage tracking failed', e && e.message) }
+        } catch (e) { console.error('usage tracking failed', e && e.message) }
 
         // load agent meta
         const db2 = require('./db')
-        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.model, m.excluded_numbers FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1',[currentAgentId])
+        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.model, m.excluded_numbers FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1', [currentAgentId])
         if (!r.rows || !r.rows.length) return
         const meta = r.rows[0]
         const systemPrompt = meta.system_prompt || ''
@@ -400,53 +401,53 @@ class ConnectionManager {
 
         // check exclusion
         if (excludedNumbers) {
-           const remoteJid = msg.key.remoteJid
-           const senderNumber = remoteJid.split('@')[0]
-           const excludedList = excludedNumbers.split(',').map(s => s.trim()).filter(Boolean)
-           const isExcluded = excludedList.some(ex => {
-              // check if exact match or contains
-              return senderNumber.includes(ex.replace(/\+/g,''))
-           })
-           if (isExcluded) {
-             console.log('Ignored message from excluded contact:', remoteJid)
-             return
-           }
+          const remoteJid = msg.key.remoteJid
+          const senderNumber = remoteJid.split('@')[0]
+          const excludedList = excludedNumbers.split(',').map(s => s.trim()).filter(Boolean)
+          const isExcluded = excludedList.some(ex => {
+            // check if exact match or contains
+            return senderNumber.includes(ex.replace(/\+/g, ''))
+          })
+          if (isExcluded) {
+            console.log('Ignored message from excluded contact:', remoteJid)
+            return
+          }
         }
 
         // call AI
-        try{
+        try {
           // indicate typing status
           await sock.sendPresenceUpdate('composing', msg.key.remoteJid)
 
           const ai = require('./ai')
-          const reply = await ai.chatCompletion({ model, systemPrompt, messages:[{ role: 'user', content: text }] })
-          
+          const reply = await ai.chatCompletion({ model, systemPrompt, messages: [{ role: 'user', content: text }] })
+
           // stop typing status
           await sock.sendPresenceUpdate('paused', msg.key.remoteJid)
 
           if (reply) {
             await sock.sendMessage(msg.key.remoteJid, { text: reply })
-            try{
+            try {
               const db3 = require('./db')
               const mid2 = require('uuid').v4()
-              await db3.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)',[mid2,id,'out',msg.key.remoteJid,reply,JSON.stringify({ reply })])
-              
+              await db3.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid2, id, 'out', msg.key.remoteJid, reply, JSON.stringify({ reply })])
+
               // Increment usage here for the outgoing AI reply
               try {
-                  await userService.incrementUsage(userId, 'messages')
+                await userService.incrementUsage(userId, 'messages')
               } catch (err) {
-                  console.error(`[AI Usage] Failed to increment usage for user ${userId}:`, err)
+                console.error(`[AI Usage] Failed to increment usage for user ${userId}:`, err)
               }
 
-            }catch(e){ console.error('persist outgoing failed', e && e.message) }
+            } catch (e) { console.error('persist outgoing failed', e && e.message) }
           }
-        }catch(e){ 
-          console.error('ai call failed', e && e.message) 
+        } catch (e) {
+          console.error('ai call failed', e && e.message)
           // ensure we stop typing on error
           await sock.sendPresenceUpdate('paused', msg.key.remoteJid)
         }
 
-      }catch(e){ console.error('messages.upsert handler error', e && e.message) }
+      } catch (e) { console.error('messages.upsert handler error', e && e.message) }
     })
 
     this.sessions.set(id, { sock, status: 'init', qr: null, userId, agentId: agentId || null })
@@ -474,7 +475,7 @@ class ConnectionManager {
       `
       // Note: The unread_count logic above is an approximation. 
       // Simplified: Just get the last message. Unread count requires "read" status which we might not track perfectly yet.
-      
+
       const simplifiedSql = `
         SELECT m.to_jid, m.body, m.created_at, m.direction, m.to_jid as id, m.to_jid as name
         FROM messages m
@@ -487,7 +488,7 @@ class ConnectionManager {
         WHERE m.session_id = $1
         ORDER BY m.created_at DESC
       `
-      
+
       const { rows } = await db.pool.query(simplifiedSql, [sessionId])
       return rows.map(r => ({
         id: r.to_jid,
@@ -527,17 +528,17 @@ class ConnectionManager {
     // normalize content
     let msgPayload = content
     let bodyText = ''
-    
+
     if (typeof content === 'string') {
-        msgPayload = { text: content }
-        bodyText = content
+      msgPayload = { text: content }
+      bodyText = content
     } else {
-        // assume valid baileys content object (e.g. { image: { url: ... }, caption: ... })
-        msgPayload = content
-        // extract text representation for body column
-        bodyText = content.caption || content.text || (content.image ? '[Image]' : content.video ? '[Video]' : content.document ? '[Document]' : '[Media]')
+      // assume valid baileys content object (e.g. { image: { url: ... }, caption: ... })
+      msgPayload = content
+      // extract text representation for body column
+      bodyText = content.caption || content.text || (content.image ? '[Image]' : content.video ? '[Video]' : content.document ? '[Document]' : '[Media]')
     }
-    
+
     console.log('[ConnectionManager] Sending payload:', JSON.stringify(msgPayload, null, 2))
 
     await s.sock.sendMessage(toJid, msgPayload)
