@@ -14,10 +14,31 @@ export default function ContactPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    setIsSent(true);
+    try {
+      const form = e.currentTarget as HTMLFormElement;
+      const fd = new FormData(form);
+      const payload = {
+        firstName: String(fd.get("firstName") || ""),
+        lastName: String(fd.get("lastName") || ""),
+        email: String(fd.get("email") || ""),
+        subject: String(fd.get("subject") || ""),
+        message: String(fd.get("message") || ""),
+      };
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to send");
+      }
+      setIsSent(true);
+      form.reset();
+    } catch (err) {
+      alert("Failed to send your message. Please try again later.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -46,8 +67,7 @@ export default function ContactPage() {
                         </div>
                         <div>
                             <h3 className="font-semibold text-lg">Email us</h3>
-                            <p className="text-zinc-600 dark:text-zinc-400">support@waas.local</p>
-                            <p className="text-zinc-600 dark:text-zinc-400">sales@waas.local</p>
+                            <p className="text-zinc-600 dark:text-zinc-400">support-waas@labofsolutions.com</p>
                         </div>
                     </div>
 
@@ -57,7 +77,7 @@ export default function ContactPage() {
                         </div>
                         <div>
                             <h3 className="font-semibold text-lg">Live Chat</h3>
-                            <p className="text-zinc-600 dark:text-zinc-400">Available Mon-Fri, 9am - 5pm UTC</p>
+                            <p className="text-zinc-600 dark:text-zinc-400">Available Mon-Fri, 11am - 2pm UTC</p>
                             <a href="#" className="text-indigo-600 hover:underline">Start a chat</a>
                         </div>
                     </div>
@@ -69,8 +89,7 @@ export default function ContactPage() {
                         <div>
                             <h3 className="font-semibold text-lg">Office</h3>
                             <p className="text-zinc-600 dark:text-zinc-400">
-                                123 Innovation Drive<br/>
-                                Tech City, TC 90210
+                                -
                             </p>
                         </div>
                     </div>
@@ -108,6 +127,7 @@ export default function ContactPage() {
                                 <input 
                                     type="text" 
                                     id="firstName" 
+                                    name="firstName"
                                     required
                                     className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-black px-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition"
                                     placeholder="John"
@@ -118,6 +138,7 @@ export default function ContactPage() {
                                 <input 
                                     type="text" 
                                     id="lastName" 
+                                    name="lastName"
                                     required
                                     className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-black px-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition"
                                     placeholder="Doe"
@@ -130,6 +151,7 @@ export default function ContactPage() {
                             <input 
                                 type="email" 
                                 id="email" 
+                                    name="email"
                                 required
                                 className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-black px-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition"
                                 placeholder="john@example.com"
@@ -140,6 +162,7 @@ export default function ContactPage() {
                             <label htmlFor="subject" className="text-sm font-medium">Subject</label>
                             <select 
                                 id="subject"
+                                name="subject"
                                 className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-black px-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition"
                             >
                                 <option>General Inquiry</option>
@@ -153,6 +176,7 @@ export default function ContactPage() {
                             <label htmlFor="message" className="text-sm font-medium">Message</label>
                             <textarea 
                                 id="message" 
+                                name="message"
                                 required
                                 rows={4}
                                 className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-black px-4 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none"

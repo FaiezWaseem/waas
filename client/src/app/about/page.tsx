@@ -9,27 +9,15 @@ import { Footer } from "@/components/marketing/Footer";
 const team = [
   {
     name: "Faiez",
-    role: "Founder & CEO",
+    role: "Co-Founder & CEO",
     image: "/avatars/faiez.png", // Placeholder
     bio: "Full-stack developer with a passion for automation and scalable systems."
   },
   {
-    name: "Sarah Johnson",
-    role: "Head of Product",
-    image: "/avatars/sarah.png",
-    bio: "Ex-Google PM focused on building intuitive and user-centric products."
-  },
-  {
-    name: "David Chen",
-    role: "Lead Engineer",
-    image: "/avatars/david.png",
-    bio: "Rust enthusiast and distributed systems expert ensuring 99.99% uptime."
-  },
-  {
-    name: "Emily Davis",
-    role: "Customer Success",
-    image: "/avatars/emily.png",
-    bio: "Dedicated to helping our customers succeed and grow their businesses."
+    name: "Huzaifa Ali khan",
+    role: "Co-Founder & CPO",
+    image: "/avatars/huzaifa.png",
+    bio: "Focused on building intuitive and user-centric products."
   }
 ];
 
