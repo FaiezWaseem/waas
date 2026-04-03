@@ -1,5 +1,9 @@
 const db = require('./db')
 const { v4: uuidv4 } = require('uuid')
+const { processReadyCampaigns } = require('./campaigns')
+
+const campaignRecipientsPerHour = Math.max(1, Number(process.env.CAMPAIGN_RECIPIENTS_PER_HOUR) || 100)
+const campaignCronIntervalMs = Math.max(1000, Math.floor((60 * 60 * 1000) / campaignRecipientsPerHour))
 
 async function rollSubscriptions(){
   try{
@@ -33,8 +37,18 @@ async function rollSubscriptions(){
   }catch(e){ console.error('rollSubscriptions failed', e && e.message) }
 }
 
-// run on import and schedule hourly
-rollSubscriptions().catch(console.error)
-setInterval(()=>{ rollSubscriptions().catch(console.error) }, 1000*60*60)
+async function processCampaigns(){
+  try{
+    await processReadyCampaigns()
+  }catch(e){
+    console.error('processCampaigns failed', e && e.message)
+  }
+}
 
-module.exports = { rollSubscriptions }
+// run on import and schedule jobs
+rollSubscriptions().catch(console.error)
+processCampaigns().catch(console.error)
+setInterval(()=>{ rollSubscriptions().catch(console.error) }, 1000*60*60)
+setInterval(()=>{ processCampaigns().catch(console.error) }, campaignCronIntervalMs)
+
+module.exports = { rollSubscriptions, processCampaigns }

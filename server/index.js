@@ -81,6 +81,7 @@ app.use('/agents', auth.verifyToken, require('./src/agents'))
 
 // client dashboard routes
 app.use('/client', auth.verifyToken, require('./src/client'))
+app.use('/campaigns', auth.verifyToken, require('./src/campaigns'))
 
 // legacy route (create agent) kept for compatibility - POST /agents
 app.post('/agents', auth.verifyToken, async (req,res)=>{

@@ -288,6 +288,31 @@ if (DB_TYPE === 'mysql') {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS campaigns (
+      id VARCHAR(36) PRIMARY KEY,
+      user_id VARCHAR(36) NOT NULL,
+      session_id VARCHAR(36),
+      name VARCHAR(255) NOT NULL,
+      message_template TEXT,
+      status VARCHAR(50) DEFAULT 'draft',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS campaign_contacts (
+      id VARCHAR(36) PRIMARY KEY,
+      campaign_id VARCHAR(36) NOT NULL,
+      name VARCHAR(255),
+      phone VARCHAR(100) NOT NULL,
+      email VARCHAR(255),
+      payload TEXT,
+      send_status VARCHAR(50) DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    );
     `
     
     await mysqlPool.query(ddl)
@@ -302,6 +327,16 @@ if (DB_TYPE === 'mysql') {
       if (!cols.includes('excluded_numbers')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN excluded_numbers TEXT')
     } catch (e) {
       console.error('MySQL agents_meta migration failed:', e.message)
+    }
+
+    try {
+      const [campaignCols] = await mysqlPool.query('SHOW COLUMNS FROM campaigns')
+      const cols = Array.isArray(campaignCols) ? campaignCols.map((c) => c.Field) : []
+      if (!cols.includes('message_template')) await mysqlPool.query('ALTER TABLE campaigns ADD COLUMN message_template TEXT')
+      if (!cols.includes('status')) await mysqlPool.query("ALTER TABLE campaigns ADD COLUMN status VARCHAR(50) DEFAULT 'draft'")
+      if (!cols.includes('updated_at')) await mysqlPool.query('ALTER TABLE campaigns ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP')
+    } catch (e) {
+      console.error('MySQL campaigns migration failed:', e.message)
     }
     
     // Seed plans
@@ -535,6 +570,31 @@ if (DB_TYPE === 'mysql') {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT,
+        name TEXT NOT NULL,
+        message_template TEXT,
+        status TEXT DEFAULT 'draft',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS campaign_contacts (
+        id TEXT PRIMARY KEY,
+        campaign_id TEXT NOT NULL,
+        name TEXT,
+        phone TEXT NOT NULL,
+        email TEXT,
+        payload TEXT,
+        send_status TEXT DEFAULT 'pending',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+      );
     `)
   
     // migration: add agent_id to sessions if missing
@@ -670,6 +730,14 @@ if (DB_TYPE === 'mysql') {
         db.exec("ALTER TABLE invoices ADD COLUMN status TEXT DEFAULT 'Unpaid'")
       }
     }catch(e){ console.error('invoices status migration failed', e && e.message) }
+
+    try{
+      const info = db.prepare("PRAGMA table_info(campaigns)").all()
+      const cols = info.map(c=>c.name)
+      if (!cols.includes('message_template')) db.exec("ALTER TABLE campaigns ADD COLUMN message_template TEXT")
+      if (!cols.includes('status')) db.exec("ALTER TABLE campaigns ADD COLUMN status TEXT DEFAULT 'draft'")
+      if (!cols.includes('updated_at')) db.exec("ALTER TABLE campaigns ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+    }catch(e){ console.error('campaigns migration failed', e && e.message) }
   
     // seed plans (idempotent)
     try{
