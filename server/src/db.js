@@ -313,6 +313,17 @@ if (DB_TYPE === 'mysql') {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS message_templates (
+      id VARCHAR(64) PRIMARY KEY,
+      user_id VARCHAR(36) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      category VARCHAR(100),
+      body TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
     `
     
     await mysqlPool.query(ddl)
@@ -594,6 +605,17 @@ if (DB_TYPE === 'mysql') {
         send_status TEXT DEFAULT 'pending',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS message_templates (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        category TEXT,
+        body TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `)
   

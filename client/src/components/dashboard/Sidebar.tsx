@@ -11,7 +11,6 @@ import {
   CreditCard,
   Settings,
   MessageSquare,
-  FileText,
   Shield,
   LogOut,
   Menu,
@@ -19,7 +18,8 @@ import {
   Bot,
   BookOpen,
   Code2,
-  Megaphone
+  Megaphone,
+  FileText
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -57,6 +57,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
     { href: "/dashboard/client", label: "Overview", icon: LayoutDashboard },
     { href: "/dashboard/client/agents", label: "Sessions", icon: Bot },
     { href: "/dashboard/client/campaigns", label: "Campaigns", icon: Megaphone },
+    { href: "/dashboard/client/templates", label: "Templates", icon: FileText },
     { href: "/dashboard/client/chats", label: "Chats", icon: MessageSquare },
     { href: "/dashboard/client/developers", label: "Developers", icon: Code2 },
     { href: "/dashboard/client/subscription", label: "Upgrade Plans", icon: CreditCard },
