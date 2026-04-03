@@ -128,7 +128,10 @@ if (DB_TYPE === 'mysql') {
     CREATE TABLE IF NOT EXISTS agents_meta (
       agent_id VARCHAR(36) PRIMARY KEY,
       system_prompt TEXT,
+      provider VARCHAR(50),
       model VARCHAR(50),
+      api_key TEXT,
+      base_url TEXT,
       excluded_numbers TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
@@ -141,7 +144,7 @@ if (DB_TYPE === 'mysql') {
       status VARCHAR(50),
       qr TEXT,
       auth_path VARCHAR(255),
-      ai_enabled TINYINT(1) DEFAULT 1,
+      ai_enabled TINYINT(1) DEFAULT 0,
       phone_number VARCHAR(50),
       contact_name VARCHAR(255),
       platform VARCHAR(50) DEFAULT 'WhatsApp',
@@ -268,6 +271,18 @@ if (DB_TYPE === 'mysql') {
     `
     
     await mysqlPool.query(ddl)
+
+    // MySQL migrations for older databases
+    try {
+      const [agentMetaCols] = await mysqlPool.query('SHOW COLUMNS FROM agents_meta')
+      const cols = Array.isArray(agentMetaCols) ? agentMetaCols.map((c) => c.Field) : []
+      if (!cols.includes('provider')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN provider VARCHAR(50)')
+      if (!cols.includes('api_key')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN api_key TEXT')
+      if (!cols.includes('base_url')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN base_url TEXT')
+      if (!cols.includes('excluded_numbers')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN excluded_numbers TEXT')
+    } catch (e) {
+      console.error('MySQL agents_meta migration failed:', e.message)
+    }
     
     // Seed plans
     const plans = [
@@ -346,7 +361,10 @@ if (DB_TYPE === 'mysql') {
       CREATE TABLE IF NOT EXISTS agents_meta (
         agent_id TEXT PRIMARY KEY,
         system_prompt TEXT,
+        provider TEXT,
         model TEXT,
+        api_key TEXT,
+        base_url TEXT,
         excluded_numbers TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
@@ -359,7 +377,7 @@ if (DB_TYPE === 'mysql') {
         status TEXT,
         qr TEXT,
         auth_path TEXT,
-        ai_enabled BOOLEAN DEFAULT 1,
+        ai_enabled BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE SET NULL
@@ -511,7 +529,7 @@ if (DB_TYPE === 'mysql') {
       const info = db.prepare("PRAGMA table_info(sessions)").all()
       const hasAi = info.some(c=>c.name==='ai_enabled')
       if (!hasAi){
-        db.exec("ALTER TABLE sessions ADD COLUMN ai_enabled BOOLEAN DEFAULT 1")
+        db.exec("ALTER TABLE sessions ADD COLUMN ai_enabled BOOLEAN DEFAULT 0")
       }
     }catch(e){ console.error('sessions ai_enabled migration failed', e && e.message) }
   
@@ -589,9 +607,18 @@ if (DB_TYPE === 'mysql') {
     // migration: add excluded_numbers to agents_meta if missing
     try{
       const info = db.prepare("PRAGMA table_info(agents_meta)").all()
-      const hasCol = info.some(c=>c.name==='excluded_numbers')
-      if (!hasCol){
+      const cols = info.map(c=>c.name)
+      if (!cols.includes('excluded_numbers')){
         db.exec("ALTER TABLE agents_meta ADD COLUMN excluded_numbers TEXT")
+      }
+      if (!cols.includes('provider')){
+        db.exec("ALTER TABLE agents_meta ADD COLUMN provider TEXT")
+      }
+      if (!cols.includes('api_key')){
+        db.exec("ALTER TABLE agents_meta ADD COLUMN api_key TEXT")
+      }
+      if (!cols.includes('base_url')){
+        db.exec("ALTER TABLE agents_meta ADD COLUMN base_url TEXT")
       }
     }catch(e){ console.error('agents_meta excluded_numbers migration failed', e && e.message) }
   

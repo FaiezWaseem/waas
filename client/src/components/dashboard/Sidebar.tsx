@@ -54,7 +54,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
 
   const clientLinks = [
     { href: "/dashboard/client", label: "Overview", icon: LayoutDashboard },
-    { href: "/dashboard/client/agents", label: "Agents", icon: Bot },
+    { href: "/dashboard/client/agents", label: "Sessions", icon: Bot },
     { href: "/dashboard/client/chats", label: "Chats", icon: MessageSquare },
     { href: "/dashboard/client/developers", label: "Developers", icon: Code2 },
     { href: "/dashboard/client/subscription", label: "Upgrade Plans", icon: CreditCard },

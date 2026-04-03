@@ -81,7 +81,7 @@ class ConnectionManager {
     // persist in db first
     try {
       const db = require('./db')
-      await db.pool.query('INSERT INTO sessions(id,user_id,agent_id,status,qr,auth_path) VALUES($1,$2,$3,$4,$5,$6)', [id, userId, agentId || null, 'init', null, `./sessions/${id}`])
+      await db.pool.query('INSERT INTO sessions(id,user_id,agent_id,status,qr,auth_path,ai_enabled) VALUES($1,$2,$3,$4,$5,$6,$7)', [id, userId, agentId || null, 'init', null, `./sessions/${id}`, 0])
     } catch (e) {
       console.error('db save failed', e.message)
       if (userId) await rollbackSessionSlot(userId)
@@ -202,7 +202,7 @@ class ConnectionManager {
     }
   }
 
-  async _initSocket(id, userId, agentId, aiEnabled = 1) {
+  async _initSocket(id, userId, agentId, aiEnabled = 0) {
     const { default: makeWASocket, useMultiFileAuthState, Browsers, DisconnectReason, fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys')
     const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${id}`)
     const { version } = await fetchLatestBaileysVersion();
@@ -279,7 +279,7 @@ class ConnectionManager {
       s.userId = userId
       s.agentId = agentId
       // Ensure aiEnabled is preserved or defaulted
-      if (s.aiEnabled === undefined) s.aiEnabled = true;
+      if (s.aiEnabled === undefined) s.aiEnabled = false;
 
       this.sessions.set(id, s)
 
@@ -392,11 +392,14 @@ class ConnectionManager {
 
         // load agent meta
         const db2 = require('./db')
-        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.model, m.excluded_numbers FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1', [currentAgentId])
+        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.provider, m.model, m.api_key, m.base_url, m.excluded_numbers FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1', [currentAgentId])
         if (!r.rows || !r.rows.length) return
         const meta = r.rows[0]
+        const provider = meta.provider || 'openai'
         const systemPrompt = meta.system_prompt || ''
-        const model = meta.model || 'gpt-3.5-turbo'
+        const model = meta.model || 'gpt-4o-mini'
+        const apiKey = meta.api_key || null
+        const baseURL = meta.base_url || null
         const excludedNumbers = meta.excluded_numbers || ''
 
         // check exclusion
@@ -420,7 +423,7 @@ class ConnectionManager {
           await sock.sendPresenceUpdate('composing', msg.key.remoteJid)
 
           const ai = require('./ai')
-          const reply = await ai.chatCompletion({ model, systemPrompt, messages: [{ role: 'user', content: text }] })
+          const reply = await ai.chatCompletion({ provider, model, systemPrompt, messages: [{ role: 'user', content: text }], apiKey, baseURL })
 
           // stop typing status
           await sock.sendPresenceUpdate('paused', msg.key.remoteJid)
