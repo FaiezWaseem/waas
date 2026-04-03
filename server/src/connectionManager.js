@@ -1,6 +1,7 @@
 const { Boom } = require('@hapi/boom')
 const { v4: uuidv4 } = require('uuid')
 const userService = require('./userService')
+const pino = require('pino')
 
 // helper: reserve session slot (increment usage)
 async function reserveSessionSlot(userId) {
@@ -210,6 +211,7 @@ class ConnectionManager {
       auth: state,
       version,
       browser: Browsers.ubuntu('WAAS AI'),
+      logger: pino({ level: 'silent' }),
       printQRInTerminal: false,
       connectTimeoutMs: 60000,
       retryRequestDelayMs: 2000,
@@ -396,11 +398,25 @@ class ConnectionManager {
         if (!r.rows || !r.rows.length) return
         const meta = r.rows[0]
         const provider = meta.provider || 'openai'
-        const systemPrompt = meta.system_prompt || ''
-        const model = meta.model || 'gpt-4o-mini'
+        let systemPrompt = meta.system_prompt || ''
+        const model = meta.model || 'openai'
         const apiKey = meta.api_key || null
         const baseURL = meta.base_url || null
         const excludedNumbers = meta.excluded_numbers || ''
+
+        try {
+          const memory = await db2.pool.query('SELECT question,answer FROM agent_memory WHERE agent_id=$1 ORDER BY created_at ASC', [currentAgentId])
+          const docs = await db2.pool.query('SELECT file_name,extracted_text FROM agent_documents WHERE agent_id=$1 ORDER BY created_at ASC', [currentAgentId])
+          const memoryBlock = memory.rows && memory.rows.length
+            ? `\n\n## Saved Q&A Memory\n${memory.rows.map((item, index) => `${index + 1}. Q: ${item.question}\nA: ${item.answer}`).join('\n\n')}`
+            : ''
+          const docsBlock = docs.rows && docs.rows.length
+            ? `\n\n## Uploaded Documents\n${docs.rows.map((item, index) => `${index + 1}. ${item.file_name}\n${String(item.extracted_text || '').slice(0, 4000)}`).join('\n\n')}`
+            : ''
+          systemPrompt = `${systemPrompt}${memoryBlock}${docsBlock}`.trim()
+        } catch (err) {
+          console.error('agent memory load failed', err && err.message)
+        }
 
         // check exclusion
         if (excludedNumbers) {

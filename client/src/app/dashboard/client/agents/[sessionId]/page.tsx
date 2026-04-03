@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { io } from "socket.io-client";
@@ -18,6 +19,8 @@ type TabId = "overview" | "agent" | "chats";
 
 type ChatItem = { id: string; name: string; lastMessage: string; time: string; unreadCount: number; status: string };
 type MessageItem = { id: string; text: string; sender: "me" | "them"; time: string; status: string };
+type MemoryItem = { id: string; question: string; answer: string; created_at: string };
+type DocumentItem = { id: string; file_name: string; file_url: string; file_type: string; created_at: string };
 type AgentConfig = {
   isEnabled: boolean;
   agentName: string;
@@ -104,6 +107,11 @@ export default function SessionDetailsPage() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [excludedInput, setExcludedInput] = useState("");
+  const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [memoryQuestion, setMemoryQuestion] = useState("");
+  const [memoryAnswer, setMemoryAnswer] = useState("");
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [showConnect, setShowConnect] = useState(false);
   const [useCustomProvider, setUseCustomProvider] = useState(false);
@@ -148,6 +156,23 @@ export default function SessionDetailsPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    const raw = window.localStorage.getItem("waas:selectedPromptTemplate");
+    if (!raw) return;
+
+    try {
+      const selected = JSON.parse(raw) as { sessionId: string; prompt: string };
+      if (selected.sessionId === sessionId && selected.prompt) {
+        patchConfig("systemPrompt", selected.prompt);
+        toast.success("Sample prompt applied");
+      }
+    } catch (error) {
+      console.error("Failed to load selected prompt template", error);
+    } finally {
+      window.localStorage.removeItem("waas:selectedPromptTemplate");
+    }
+  }, [sessionId]);
+
   async function loadSession() {
     try {
       setIsLoading(true);
@@ -174,12 +199,16 @@ export default function SessionDetailsPage() {
             systemPrompt: a.system_prompt || "",
             excludedNumbers: a.excluded_numbers || "",
           };
+          setMemoryItems(agentRes.data.memory || []);
+          setDocuments(agentRes.data.documents || []);
           setUseCustomProvider(hasCustomProvider);
         } catch (error) {
           console.error("Failed to fetch agent details", error);
         }
       } else {
         setUseCustomProvider(false);
+        setMemoryItems([]);
+        setDocuments([]);
       }
       setSession({
         id: s.id,
@@ -300,6 +329,90 @@ export default function SessionDetailsPage() {
       toast.error("Failed to save changes");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function ensureAgentId() {
+    if (session.agentId) return session.agentId;
+    const res = await api.post("/agents", {
+      name: session.config.agentName || `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
+      provider: useCustomProvider ? session.config.provider : "openai",
+      model: useCustomProvider ? session.config.model : (providers.find((item) => item.id === "openai")?.model || "gpt-4o-mini"),
+      api_key: useCustomProvider ? (session.config.apiKey || "") : "",
+      base_url: useCustomProvider ? (session.config.baseUrl || "") : "",
+      system_prompt: session.config.systemPrompt,
+      excluded_numbers: session.config.excludedNumbers || "",
+      webhook_url: "",
+    });
+    const agentId = res.data.id;
+    await api.patch(`/sessions/${sessionId}`, { agent_id: agentId });
+    setSession((prev) => ({ ...prev, agentId }));
+    return agentId;
+  }
+
+  async function addMemoryItem() {
+    const question = memoryQuestion.trim();
+    const answer = memoryAnswer.trim();
+    if (!question || !answer) {
+      toast.error("Question and answer are required");
+      return;
+    }
+    try {
+      const agentId = await ensureAgentId();
+      await api.post(`/agents/${agentId}/memory`, { question, answer });
+      setMemoryQuestion("");
+      setMemoryAnswer("");
+      const res = await api.get(`/agents/${agentId}`);
+      setMemoryItems(res.data.memory || []);
+      toast.success("Memory added");
+    } catch (error) {
+      console.error("Failed to add memory", error);
+      toast.error("Failed to add memory");
+    }
+  }
+
+  async function deleteMemoryItem(memoryId: string) {
+    try {
+      const agentId = await ensureAgentId();
+      await api.delete(`/agents/${agentId}/memory/${memoryId}`);
+      setMemoryItems((prev) => prev.filter((item) => item.id !== memoryId));
+      toast.success("Memory removed");
+    } catch (error) {
+      console.error("Failed to delete memory", error);
+      toast.error("Failed to delete memory");
+    }
+  }
+
+  async function uploadDocument(file: File | null) {
+    if (!file) return;
+    try {
+      setIsUploadingDoc(true);
+      const agentId = await ensureAgentId();
+      const formData = new FormData();
+      formData.append("document", file);
+      await api.post(`/agents/${agentId}/documents`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const res = await api.get(`/agents/${agentId}`);
+      setDocuments(res.data.documents || []);
+      toast.success("Document uploaded");
+    } catch (error) {
+      console.error("Failed to upload document", error);
+      toast.error("Failed to upload document");
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  }
+
+  async function deleteDocument(documentId: string) {
+    try {
+      const agentId = await ensureAgentId();
+      await api.delete(`/agents/${agentId}/documents/${documentId}`);
+      setDocuments((prev) => prev.filter((item) => item.id !== documentId));
+      toast.success("Document removed");
+    } catch (error) {
+      console.error("Failed to delete document", error);
+      toast.error("Failed to delete document");
     }
   }
 
@@ -512,10 +625,22 @@ export default function SessionDetailsPage() {
                         {provider.supportsBaseUrl && <Field label="Base URL"><input value={session.config.baseUrl} onChange={(e) => patchConfig("baseUrl", e.target.value)} className={inputCls} placeholder="https://api.example.com" /></Field>}
                       </>
                     ) : (
-                      <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">
-                        Provider settings are hidden while you use the built-in AI agent. Click <span className="font-medium">Custom Provider</span> on the left if you want to supply your own provider, model, API key, or endpoint.
-                      </div>
+                      <div></div>
                     )}
+                    <Field label="AI Agent Sample Prompt Gallery">
+                      <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
+                        <div>
+                          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Browse ready-made prompts</div>
+                          <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Open a dedicated gallery page for Customer Support, Sales, Business Details, and more.</div>
+                        </div>
+                        <Link
+                          href={`/dashboard/client/agents/prompts?sessionId=${sessionId}`}
+                          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                        >
+                          Open Gallery
+                        </Link>
+                      </div>
+                    </Field>
                     <Field label="System Prompt"><textarea value={session.config.systemPrompt} onChange={(e) => patchConfig("systemPrompt", e.target.value)} rows={8} className={inputCls} placeholder="You are a helpful support assistant..." /></Field>
                     <Field label="Excluded Contacts & Groups">
                       <div className="space-y-4">
@@ -560,6 +685,59 @@ export default function SessionDetailsPage() {
                           ) : (
                             <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
                               No excluded contacts or groups added yet.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Field>
+                    <Field label="Agent Memory: Custom Question & Answer">
+                      <div className="space-y-4">
+                        <input value={memoryQuestion} onChange={(e) => setMemoryQuestion(e.target.value)} className={inputCls} placeholder="Question, e.g. What are your office hours?" />
+                        <textarea value={memoryAnswer} onChange={(e) => setMemoryAnswer(e.target.value)} rows={4} className={inputCls} placeholder="Answer the agent should use..." />
+                        <button type="button" onClick={addMemoryItem} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                          Add Memory
+                        </button>
+                        <div className="space-y-2">
+                          {memoryItems.length > 0 ? memoryItems.map((item) => (
+                            <div key={item.id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+                              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{item.question}</div>
+                              <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{item.answer}</div>
+                              <button type="button" onClick={() => deleteMemoryItem(item.id)} className="mt-3 text-sm font-medium text-red-600 hover:text-red-700">
+                                Remove
+                              </button>
+                            </div>
+                          )) : (
+                            <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
+                              No custom Q&A memory added yet.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Field>
+                    <Field label="Agent Documents">
+                      <div className="space-y-4">
+                        <input
+                          type="file"
+                          onChange={(e) => void uploadDocument(e.target.files?.[0] || null)}
+                          className={`${inputCls} file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-indigo-700`}
+                        />
+                        {isUploadingDoc && <div className="text-sm text-zinc-500">Uploading document...</div>}
+                        <div className="space-y-2">
+                          {documents.length > 0 ? documents.map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+                              <div>
+                                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{doc.file_name}</div>
+                                <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline">
+                                  View document
+                                </a>
+                              </div>
+                              <button type="button" onClick={() => deleteDocument(doc.id)} className="text-sm font-medium text-red-600 hover:text-red-700">
+                                Remove
+                              </button>
+                            </div>
+                          )) : (
+                            <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
+                              No documents uploaded yet.
                             </div>
                           )}
                         </div>

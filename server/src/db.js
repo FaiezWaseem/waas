@@ -268,6 +268,26 @@ if (DB_TYPE === 'mysql') {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS agent_memory (
+      id VARCHAR(36) PRIMARY KEY,
+      agent_id VARCHAR(36) NOT NULL,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_documents (
+      id VARCHAR(36) PRIMARY KEY,
+      agent_id VARCHAR(36) NOT NULL,
+      file_name VARCHAR(255) NOT NULL,
+      file_url TEXT NOT NULL,
+      file_type VARCHAR(100),
+      extracted_text TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
+    );
     `
     
     await mysqlPool.query(ddl)
@@ -494,6 +514,26 @@ if (DB_TYPE === 'mysql') {
         last_used_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_memory (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_documents (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        file_type TEXT,
+        extracted_text TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
       );
     `)
   

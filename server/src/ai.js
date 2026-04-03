@@ -116,7 +116,7 @@ async function callGemini({ model, systemPrompt, messages, apiKey, baseURL }) {
 
 async function chatCompletion({
   provider = 'openai',
-  model = 'gpt-4o-mini',
+  model = 'openai',
   systemPrompt = '',
   messages = [],
   apiKey,
