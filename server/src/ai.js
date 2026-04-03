@@ -1,7 +1,10 @@
+const path = require('path')
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') })
 const OpenAI = require('openai')
 
 const defaultApiKey = process.env.OPENAI_API_KEY
 const defaultBaseURL = process.env.OPENAI_BASE_URL
+const defaultOpenAIModel = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
 if (!defaultApiKey) {
   console.warn('OPENAI_API_KEY not set - OpenAI-backed AI features will fail until provided')
@@ -16,6 +19,43 @@ function normalizeMessages(systemPrompt = '', messages = []) {
 
 function requireApiKey(apiKey, provider) {
   if (!apiKey) throw new Error(`${provider} API key not configured`)
+}
+
+function resolveModelForProvider({ provider, model, baseURL, hasCustomApiConfig }) {
+  const normalizedProvider = String(provider || 'openai').toLowerCase()
+  const normalizedModel = String(model || '').trim()
+  const normalizedBaseURL = String(baseURL || '').toLowerCase()
+
+  if (normalizedProvider === 'claude') {
+    return normalizedModel || 'claude-3-5-sonnet-latest'
+  }
+
+  if (normalizedProvider === 'gemini') {
+    return normalizedModel || 'gemini-2.5-flash'
+  }
+
+  if (normalizedProvider === 'deepseek') {
+    return normalizedModel || 'deepseek-chat'
+  }
+
+  if (normalizedProvider === 'openai_compatible') {
+    return normalizedModel || 'custom-model'
+  }
+
+  // Built-in platform AI:
+  // If the app is pointed at Pollinations, standard OpenAI model ids such as
+  // gpt-4o-mini are rejected there. Use the provider alias they expect instead.
+  if (!hasCustomApiConfig && normalizedBaseURL.includes('gen.pollinations.ai')) {
+    if (!normalizedModel || normalizedModel === 'openai' || normalizedModel.startsWith('gpt-')) {
+      return 'openai'
+    }
+  }
+
+  if (!normalizedModel || normalizedModel === 'openai') {
+    return defaultOpenAIModel
+  }
+
+  return normalizedModel
 }
 
 async function callOpenAICompatible({ model, systemPrompt, messages, apiKey, baseURL }) {
@@ -125,19 +165,25 @@ async function chatCompletion({
   const normalizedProvider = provider.toLowerCase()
   const resolvedApiKey = apiKey || defaultApiKey
   const resolvedBaseURL = baseURL || defaultBaseURL
+  const resolvedModel = resolveModelForProvider({
+    provider: normalizedProvider,
+    model,
+    baseURL: resolvedBaseURL,
+    hasCustomApiConfig: Boolean(apiKey || baseURL),
+  })
 
   try {
     if (normalizedProvider === 'claude') {
-      return await callClaude({ model, systemPrompt, messages, apiKey: resolvedApiKey, baseURL: resolvedBaseURL })
+      return await callClaude({ model: resolvedModel, systemPrompt, messages, apiKey: resolvedApiKey, baseURL: resolvedBaseURL })
     }
 
     if (normalizedProvider === 'gemini') {
-      return await callGemini({ model, systemPrompt, messages, apiKey: resolvedApiKey, baseURL: resolvedBaseURL })
+      return await callGemini({ model: resolvedModel, systemPrompt, messages, apiKey: resolvedApiKey, baseURL: resolvedBaseURL })
     }
 
     if (normalizedProvider === 'deepseek') {
       return await callOpenAICompatible({
-        model,
+        model: resolvedModel,
         systemPrompt,
         messages,
         apiKey: resolvedApiKey,
@@ -147,7 +193,7 @@ async function chatCompletion({
 
     if (normalizedProvider === 'openai_compatible') {
       return await callOpenAICompatible({
-        model,
+        model: resolvedModel,
         systemPrompt,
         messages,
         apiKey: resolvedApiKey,
@@ -156,7 +202,7 @@ async function chatCompletion({
     }
 
     return await callOpenAICompatible({
-      model,
+      model: resolvedModel,
       systemPrompt,
       messages,
       apiKey: resolvedApiKey,

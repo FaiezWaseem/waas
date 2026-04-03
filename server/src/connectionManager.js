@@ -461,7 +461,14 @@ class ConnectionManager {
             } catch (e) { console.error('persist outgoing failed', e && e.message) }
           }
         } catch (e) {
-          console.error('ai call failed', e && e.message)
+          console.error('ai call failed', {
+            sessionId: id,
+            agentId: currentAgentId,
+            provider,
+            model,
+            baseURL: baseURL || null,
+            error: e && e.message,
+          })
           // ensure we stop typing on error
           await sock.sendPresenceUpdate('paused', msg.key.remoteJid)
         }
@@ -469,7 +476,14 @@ class ConnectionManager {
       } catch (e) { console.error('messages.upsert handler error', e && e.message) }
     })
 
-    this.sessions.set(id, { sock, status: 'init', qr: null, userId, agentId: agentId || null })
+    this.sessions.set(id, {
+      sock,
+      status: 'init',
+      qr: null,
+      userId,
+      agentId: agentId || null,
+      aiEnabled: !!aiEnabled,
+    })
   }
 
   async getChats(sessionId) {

@@ -46,7 +46,7 @@ type SessionData = {
 };
 
 const providers = [
-  { id: "openai" as ProviderId, name: "OpenAI", icon: Sparkles, model: "gpt-4o-mini", supportsBaseUrl: false, desc: "Use OpenAI or platform default key." },
+  { id: "openai" as ProviderId, name: "OpenAI", icon: Sparkles, model: "openai", supportsBaseUrl: false, desc: "Use OpenAI or platform default key." },
   { id: "claude" as ProviderId, name: "Claude", icon: Brain, model: "claude-3-5-sonnet-latest", supportsBaseUrl: true, desc: "Anthropic models." },
   { id: "gemini" as ProviderId, name: "Gemini", icon: Zap, model: "gemini-2.5-flash", supportsBaseUrl: true, desc: "Google Gemini models." },
   { id: "deepseek" as ProviderId, name: "DeepSeek", icon: Workflow, model: "deepseek-chat", supportsBaseUrl: true, desc: "DeepSeek via compatible API." },
@@ -57,7 +57,7 @@ const emptyConfig: AgentConfig = {
   isEnabled: false,
   agentName: "",
   provider: "openai",
-  model: "gpt-4o-mini",
+  model: "openai",
   apiKey: "",
   baseUrl: "",
   systemPrompt: "",
@@ -304,7 +304,7 @@ export default function SessionDetailsPage() {
       const providerModel =
         useCustomProvider
           ? session.config.model
-          : (providers.find((item) => item.id === "openai")?.model || "gpt-4o-mini");
+          : (providers.find((item) => item.id === "openai")?.model || "openai");
       const payload = {
         name: session.config.agentName || `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
         provider: providerId,
@@ -337,7 +337,7 @@ export default function SessionDetailsPage() {
     const res = await api.post("/agents", {
       name: session.config.agentName || `Agent for ${session.phoneNumber || session.id.slice(0, 8)}`,
       provider: useCustomProvider ? session.config.provider : "openai",
-      model: useCustomProvider ? session.config.model : (providers.find((item) => item.id === "openai")?.model || "gpt-4o-mini"),
+      model: useCustomProvider ? session.config.model : (providers.find((item) => item.id === "openai")?.model || "openai"),
       api_key: useCustomProvider ? (session.config.apiKey || "") : "",
       base_url: useCustomProvider ? (session.config.baseUrl || "") : "",
       system_prompt: session.config.systemPrompt,
@@ -619,7 +619,7 @@ export default function SessionDetailsPage() {
                           </div>
                         </Field>
                         <div className="grid gap-6 md:grid-cols-2">
-                          <Field label="Model"><input value={session.config.model} onChange={(e) => patchConfig("model", e.target.value)} className={inputCls} placeholder="gpt-4o-mini" /></Field>
+                          <Field label="Model"><input value={session.config.model} onChange={(e) => patchConfig("model", e.target.value)} className={inputCls} placeholder="openai" /></Field>
                           <Field label="Custom API Key"><div className="relative"><KeyRound className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" /><input type="password" value={session.config.apiKey} onChange={(e) => patchConfig("apiKey", e.target.value)} className={`${inputCls} pl-10`} placeholder="Optional custom key" /></div></Field>
                         </div>
                         {provider.supportsBaseUrl && <Field label="Base URL"><input value={session.config.baseUrl} onChange={(e) => patchConfig("baseUrl", e.target.value)} className={inputCls} placeholder="https://api.example.com" /></Field>}
