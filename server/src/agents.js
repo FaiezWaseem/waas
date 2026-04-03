@@ -48,6 +48,22 @@ async function buildAgentKnowledge(agentId) {
   return `${memoryBlock}${docsBlock}`.trim()
 }
 
+function applyResponseStyle(systemPrompt = '') {
+  const styleGuide = `
+## Messaging Style Rules
+- Reply naturally, like a human chatting on WhatsApp.
+- For simple greetings like "hi", "hey", "hello", or "salam", keep the reply short and warm.
+- Do not introduce yourself, company details, prices, business hours, or service list unless the user asks for them or the context clearly requires them.
+- Do not give promotional information in the first reply to a casual greeting.
+- If the user says they saw an ad or shows initial interest, respond conversationally and ask what they are looking for before mentioning pricing.
+- Only mention price, packages, monthly plans, or rates when the user explicitly asks about cost, price, charges, package, budget, or plan details.
+- Prefer one or two short sentences for casual messages.
+- Only provide detailed business information when the user asks a relevant follow-up question.
+`.trim()
+
+  return [styleGuide, systemPrompt].filter(Boolean).join('\n\n')
+}
+
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.sub
@@ -99,7 +115,7 @@ router.post('/:id/run', async (req, res) => {
     const r = await db.pool.query('SELECT system_prompt,provider,model,api_key,base_url FROM agents_meta WHERE agent_id=$1', [agentId])
     const meta = r.rows && r.rows[0]
     const knowledge = await buildAgentKnowledge(agentId)
-    const systemPrompt = `${meta ? meta.system_prompt || '' : ''}${knowledge ? `\n\n${knowledge}` : ''}`.trim()
+    const systemPrompt = applyResponseStyle(`${meta ? meta.system_prompt || '' : ''}${knowledge ? `\n\n${knowledge}` : ''}`.trim())
     const provider = meta ? meta.provider : 'openai'
     const model = meta ? meta.model : 'openai'
     const apiKey = meta ? meta.api_key : null

@@ -3,6 +3,22 @@ const { v4: uuidv4 } = require('uuid')
 const userService = require('./userService')
 const pino = require('pino')
 
+function applyResponseStyle(systemPrompt = '') {
+  const styleGuide = `
+## Messaging Style Rules
+- Reply naturally, like a human chatting on WhatsApp.
+- For simple greetings like "hi", "hey", "hello", or "salam", keep the reply short and warm.
+- Do not introduce yourself, company details, prices, business hours, or service list unless the user asks for them or the context clearly requires them.
+- Do not give promotional information in the first reply to a casual greeting.
+- If the user says they saw an ad or shows initial interest, respond conversationally and ask what they are looking for before mentioning pricing.
+- Only mention price, packages, monthly plans, or rates when the user explicitly asks about cost, price, charges, package, budget, or plan details.
+- Prefer one or two short sentences for casual messages.
+- Only provide detailed business information when the user asks a relevant follow-up question.
+`.trim()
+
+  return [styleGuide, systemPrompt].filter(Boolean).join('\n\n')
+}
+
 // helper: reserve session slot (increment usage)
 async function reserveSessionSlot(userId) {
   try {
@@ -417,6 +433,8 @@ class ConnectionManager {
         } catch (err) {
           console.error('agent memory load failed', err && err.message)
         }
+
+        systemPrompt = applyResponseStyle(systemPrompt)
 
         // check exclusion
         if (excludedNumbers) {
