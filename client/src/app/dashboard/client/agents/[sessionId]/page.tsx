@@ -145,7 +145,9 @@ export default function SessionDetailsPage() {
         void loadSession();
       }
     });
-    return () => socket.disconnect();
+    return () => {
+      socket.disconnect();
+    };
   }, [sessionId]);
 
   useEffect(() => {
