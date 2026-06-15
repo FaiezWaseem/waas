@@ -77,7 +77,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, webhook_url, system_prompt, provider, model, api_key, base_url, excluded_numbers } = req.body
+    const { name, webhook_url, system_prompt, provider, model, api_key, base_url, excluded_numbers, human_handoff_phone } = req.body
     const userId = req.user && req.user.sub ? req.user.sub : req.body.userId
 
     try {
@@ -95,11 +95,11 @@ router.post('/', async (req, res) => {
     const id = uuidv4()
     await db.pool.query('INSERT INTO agents(id,user_id,name,webhook_url,created_at) VALUES($1,$2,$3,$4,CURRENT_TIMESTAMP)', [id, userId, name, webhook_url])
     try {
-      await db.pool.query('CREATE TABLE IF NOT EXISTS agents_meta (agent_id TEXT PRIMARY KEY, system_prompt TEXT, provider TEXT, model TEXT, api_key TEXT, base_url TEXT, excluded_numbers TEXT)')
+      await db.pool.query('CREATE TABLE IF NOT EXISTS agents_meta (agent_id TEXT PRIMARY KEY, system_prompt TEXT, provider TEXT, model TEXT, api_key TEXT, base_url TEXT, excluded_numbers TEXT, human_handoff_phone TEXT)')
     } catch (_e) {}
     await db.pool.query(
-      'REPLACE INTO agents_meta(agent_id,system_prompt,provider,model,api_key,base_url,excluded_numbers) VALUES($1,$2,$3,$4,$5,$6,$7)',
-      [id, system_prompt || null, provider || 'openai', model || 'openai', api_key || null, base_url || null, excluded_numbers || null]
+      'REPLACE INTO agents_meta(agent_id,system_prompt,provider,model,api_key,base_url,excluded_numbers,human_handoff_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+      [id, system_prompt || null, provider || 'openai', model || 'openai', api_key || null, base_url || null, excluded_numbers || null, human_handoff_phone || null]
     )
     res.json({ id, name, webhook_url })
   } catch (e) {
@@ -155,7 +155,7 @@ router.get('/:id', async (req, res) => {
     if (owned.error) return res.status(owned.status).json({ error: owned.error })
 
     const agent = owned.agent
-    const meta = await db.pool.query('SELECT system_prompt,provider,model,api_key,base_url,excluded_numbers FROM agents_meta WHERE agent_id=$1', [id])
+    const meta = await db.pool.query('SELECT system_prompt,provider,model,api_key,base_url,excluded_numbers,human_handoff_phone FROM agents_meta WHERE agent_id=$1', [id])
     if (meta.rows && meta.rows.length) {
       agent.system_prompt = meta.rows[0].system_prompt
       agent.provider = meta.rows[0].provider
@@ -163,6 +163,7 @@ router.get('/:id', async (req, res) => {
       agent.api_key = meta.rows[0].api_key
       agent.base_url = meta.rows[0].base_url
       agent.excluded_numbers = meta.rows[0].excluded_numbers
+      agent.human_handoff_phone = meta.rows[0].human_handoff_phone
     } else {
       agent.system_prompt = null
       agent.provider = 'openai'
@@ -170,6 +171,7 @@ router.get('/:id', async (req, res) => {
       agent.api_key = null
       agent.base_url = null
       agent.excluded_numbers = null
+      agent.human_handoff_phone = null
     }
 
     const memory = await db.pool.query('SELECT id,question,answer,created_at FROM agent_memory WHERE agent_id=$1 ORDER BY created_at DESC', [id])
@@ -185,14 +187,14 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const id = req.params.id
-    const { name, webhook_url, system_prompt, provider, model, api_key, base_url, excluded_numbers } = req.body
+    const { name, webhook_url, system_prompt, provider, model, api_key, base_url, excluded_numbers, human_handoff_phone } = req.body
     const owned = await ensureAgentOwnership(id, req.user.sub)
     if (owned.error) return res.status(owned.status).json({ error: owned.error })
 
     if (name) await db.pool.query('UPDATE agents SET name=$1 WHERE id=$2', [name, id])
     if (webhook_url !== undefined) await db.pool.query('UPDATE agents SET webhook_url=$1 WHERE id=$2', [webhook_url, id])
 
-    if (system_prompt !== undefined || provider !== undefined || model !== undefined || api_key !== undefined || base_url !== undefined || excluded_numbers !== undefined) {
+    if (system_prompt !== undefined || provider !== undefined || model !== undefined || api_key !== undefined || base_url !== undefined || excluded_numbers !== undefined || human_handoff_phone !== undefined) {
       const meta = await db.pool.query('SELECT agent_id FROM agents_meta WHERE agent_id=$1', [id])
       if (meta.rows && meta.rows.length) {
         if (system_prompt !== undefined) await db.pool.query('UPDATE agents_meta SET system_prompt=$1 WHERE agent_id=$2', [system_prompt, id])
@@ -201,10 +203,11 @@ router.patch('/:id', async (req, res) => {
         if (api_key !== undefined) await db.pool.query('UPDATE agents_meta SET api_key=$1 WHERE agent_id=$2', [api_key || null, id])
         if (base_url !== undefined) await db.pool.query('UPDATE agents_meta SET base_url=$1 WHERE agent_id=$2', [base_url || null, id])
         if (excluded_numbers !== undefined) await db.pool.query('UPDATE agents_meta SET excluded_numbers=$1 WHERE agent_id=$2', [excluded_numbers, id])
+        if (human_handoff_phone !== undefined) await db.pool.query('UPDATE agents_meta SET human_handoff_phone=$1 WHERE agent_id=$2', [human_handoff_phone || null, id])
       } else {
         await db.pool.query(
-          'INSERT INTO agents_meta(agent_id,system_prompt,provider,model,api_key,base_url,excluded_numbers) VALUES($1,$2,$3,$4,$5,$6,$7)',
-          [id, system_prompt || null, provider || 'openai', model || 'openai', api_key || null, base_url || null, excluded_numbers || null]
+          'INSERT INTO agents_meta(agent_id,system_prompt,provider,model,api_key,base_url,excluded_numbers,human_handoff_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+          [id, system_prompt || null, provider || 'openai', model || 'openai', api_key || null, base_url || null, excluded_numbers || null, human_handoff_phone || null]
         )
       }
     }

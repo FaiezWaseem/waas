@@ -133,6 +133,7 @@ if (DB_TYPE === 'mysql') {
       api_key TEXT,
       base_url TEXT,
       excluded_numbers TEXT,
+      human_handoff_phone VARCHAR(100),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
     );
@@ -303,6 +304,18 @@ if (DB_TYPE === 'mysql') {
       FOREIGN KEY(updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS chat_summaries (
+      id VARCHAR(36) PRIMARY KEY,
+      session_id VARCHAR(36) NOT NULL,
+      chat_jid VARCHAR(255) NOT NULL,
+      summary_text TEXT,
+      source_message_count INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_session_chat_summary (session_id, chat_jid),
+      FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS campaigns (
       id VARCHAR(36) PRIMARY KEY,
       user_id VARCHAR(36) NOT NULL,
@@ -350,6 +363,7 @@ if (DB_TYPE === 'mysql') {
       if (!cols.includes('api_key')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN api_key TEXT')
       if (!cols.includes('base_url')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN base_url TEXT')
       if (!cols.includes('excluded_numbers')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN excluded_numbers TEXT')
+      if (!cols.includes('human_handoff_phone')) await mysqlPool.query('ALTER TABLE agents_meta ADD COLUMN human_handoff_phone VARCHAR(100)')
     } catch (e) {
       console.error('MySQL agents_meta migration failed:', e.message)
     }
@@ -446,6 +460,7 @@ if (DB_TYPE === 'mysql') {
         api_key TEXT,
         base_url TEXT,
         excluded_numbers TEXT,
+        human_handoff_phone TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
       );
@@ -610,6 +625,18 @@ if (DB_TYPE === 'mysql') {
         FOREIGN KEY(updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
       );
 
+      CREATE TABLE IF NOT EXISTS chat_summaries (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        chat_jid TEXT NOT NULL,
+        summary_text TEXT,
+        source_message_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(session_id, chat_jid),
+        FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+
       CREATE TABLE IF NOT EXISTS campaigns (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -769,6 +796,9 @@ if (DB_TYPE === 'mysql') {
       }
       if (!cols.includes('base_url')){
         db.exec("ALTER TABLE agents_meta ADD COLUMN base_url TEXT")
+      }
+      if (!cols.includes('human_handoff_phone')){
+        db.exec("ALTER TABLE agents_meta ADD COLUMN human_handoff_phone TEXT")
       }
     }catch(e){ console.error('agents_meta excluded_numbers migration failed', e && e.message) }
   

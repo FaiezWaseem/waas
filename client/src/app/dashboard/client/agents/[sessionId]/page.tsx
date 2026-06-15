@@ -40,6 +40,7 @@ type AgentConfig = {
   baseUrl: string;
   systemPrompt: string;
   excludedNumbers: string;
+  humanHandoffPhone: string;
 };
 type SessionData = {
   id: string;
@@ -72,6 +73,7 @@ const emptyConfig: AgentConfig = {
   baseUrl: "",
   systemPrompt: "",
   excludedNumbers: "",
+  humanHandoffPhone: "",
 };
 
 const inputCls = "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100";
@@ -130,6 +132,7 @@ export default function SessionDetailsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isUpdatingHandoff, setIsUpdatingHandoff] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
 
   const provider = useMemo(() => providers.find((item) => item.id === session.config.provider) || providers[0], [session.config.provider]);
 
@@ -221,6 +224,7 @@ export default function SessionDetailsPage() {
             baseUrl: a.base_url || "",
             systemPrompt: a.system_prompt || "",
             excludedNumbers: a.excluded_numbers || "",
+            humanHandoffPhone: a.human_handoff_phone || "",
           };
           setMemoryItems(agentRes.data.memory || []);
           setDocuments(agentRes.data.documents || []);
@@ -336,6 +340,7 @@ export default function SessionDetailsPage() {
         base_url: useCustomProvider ? (session.config.baseUrl || "") : "",
         system_prompt: session.config.systemPrompt,
         excluded_numbers: session.config.excludedNumbers || "",
+        human_handoff_phone: session.config.humanHandoffPhone || "",
         webhook_url: "",
       };
       if (agentId) await api.patch(`/agents/${agentId}`, payload);
@@ -365,6 +370,7 @@ export default function SessionDetailsPage() {
       base_url: useCustomProvider ? (session.config.baseUrl || "") : "",
       system_prompt: session.config.systemPrompt,
       excluded_numbers: session.config.excludedNumbers || "",
+      human_handoff_phone: session.config.humanHandoffPhone || "",
       webhook_url: "",
     });
     const agentId = res.data.id;
@@ -518,6 +524,25 @@ export default function SessionDetailsPage() {
       toast.error("Failed to update handoff mode");
     } finally {
       setIsUpdatingHandoff(false);
+    }
+  }
+
+  async function handleClearChat() {
+    if (!selectedChatId) return;
+    if (!confirm("Clear this chat history? This will remove all messages, summary memory, and handoff state for this thread.")) return;
+
+    setIsClearingChat(true);
+    try {
+      await api.delete(`/sessions/${sessionId}/chats/${encodeURIComponent(selectedChatId)}/messages`);
+      setMessages([]);
+      setSelectedChatId(null);
+      await loadChats();
+      toast.success("Chat cleared");
+    } catch (error) {
+      console.error("Failed to clear chat", error);
+      toast.error("Failed to clear chat");
+    } finally {
+      setIsClearingChat(false);
     }
   }
 
@@ -701,6 +726,17 @@ export default function SessionDetailsPage() {
                         </Link>
                       </div>
                     </Field>
+                    <Field label="Human-in-the-Loop Admin Phone">
+                      <input
+                        value={session.config.humanHandoffPhone}
+                        onChange={(e) => patchConfig("humanHandoffPhone", e.target.value)}
+                        className={inputCls}
+                        placeholder="923001234567"
+                      />
+                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                        If set, the AI can notify this admin number when it detects a lead or situation that should be handled by a human. That chat will then automatically switch to human takeover.
+                      </p>
+                    </Field>
                     <Field label="System Prompt"><textarea value={session.config.systemPrompt} onChange={(e) => patchConfig("systemPrompt", e.target.value)} rows={8} className={inputCls} placeholder="You are a helpful support assistant..." /></Field>
                     <Field label="Excluded Contacts & Groups">
                       <div className="space-y-4">
@@ -840,6 +876,14 @@ export default function SessionDetailsPage() {
                           className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${selectedChatMode === "human" ? "bg-indigo-600 text-white hover:bg-indigo-700" : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"} disabled:cursor-not-allowed disabled:opacity-60`}
                         >
                           {isUpdatingHandoff ? "Updating..." : selectedChatMode === "human" ? "Return to AI" : "Take over"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isClearingChat}
+                          onClick={() => void handleClearChat()}
+                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-400"
+                        >
+                          {isClearingChat ? "Clearing..." : "Clear chat"}
                         </button>
                         <div className="flex items-center gap-4 text-zinc-500"><Search className="h-5 w-5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300" /><MoreVertical className="h-5 w-5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300" /></div>
                       </div>

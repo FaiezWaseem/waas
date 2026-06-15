@@ -3,6 +3,8 @@ const { v4: uuidv4 } = require('uuid')
 const userService = require('./userService')
 const pino = require('pino')
 
+const MAX_CONTEXT_MESSAGES = 15
+
 function applyResponseStyle(systemPrompt = '') {
   const styleGuide = `
 ## Messaging Style Rules
@@ -14,9 +16,72 @@ function applyResponseStyle(systemPrompt = '') {
 - Only mention price, packages, monthly plans, or rates when the user explicitly asks about cost, price, charges, package, budget, or plan details.
 - Prefer one or two short sentences for casual messages.
 - Only provide detailed business information when the user asks a relevant follow-up question.
+- Do not tell the customer to contact admin or human support unless they explicitly ask for a person or a real manual step truly requires it.
 `.trim()
 
   return [styleGuide, systemPrompt].filter(Boolean).join('\n\n')
+}
+
+function normalizePhoneToJid(phone) {
+  const digits = String(phone || '').replace(/[^\d]/g, '')
+  return digits ? `${digits}@s.whatsapp.net` : null
+}
+
+function shouldAttemptEscalation(latestUserMessage = '') {
+  const text = String(latestUserMessage || '').toLowerCase()
+  if (!text) return false
+
+  const explicitHumanTerms = [
+    'admin',
+    'human',
+    'person',
+    'representative',
+    'call me',
+    'callback',
+    'contact me',
+    'talk to someone',
+    'talk to a person',
+    'speak to',
+  ]
+
+  const manualActionTerms = [
+    'i want it',
+    'want it',
+    'i need it',
+    'need it',
+    'i will buy',
+    'i want this',
+    'i need this',
+    'interested',
+    'lets do it',
+    'let\'s do it',
+    'proceed',
+    'ready to buy',
+    'want to buy',
+    'subscribe now',
+    'subscribe me',
+    'activate now',
+    'activate it',
+    'activation',
+    'payment done',
+    'paid already',
+    'sent payment',
+    'share payment',
+    'place order',
+    'confirm order',
+    'proceed with order',
+    'admin number',
+    'send number',
+    'book now',
+    'refund',
+    'complaint',
+    'issue not resolved',
+    'not satisfied',
+    'manual approval',
+  ]
+
+  return explicitHumanTerms.some((term) => text.includes(term))
+    || manualActionTerms.some((term) => text.includes(term))
 }
 
 // helper: reserve session slot (increment usage)
@@ -86,6 +151,228 @@ class ConnectionManager {
       console.error('getChatHandoff failed', e && e.message)
       return null
     }
+  }
+
+  async getRecentMessagesForContext(sessionId, chatJid, limit = MAX_CONTEXT_MESSAGES) {
+    const db = require('./db')
+    const result = await db.pool.query(
+      'SELECT id,direction,body,created_at FROM messages WHERE session_id=$1 AND to_jid=$2 ORDER BY created_at DESC LIMIT $3',
+      [sessionId, chatJid, limit]
+    )
+
+    return (result.rows || []).reverse()
+  }
+
+  async getOrCreateChatSummary({
+    sessionId,
+    chatJid,
+    provider,
+    model,
+    apiKey,
+    baseURL,
+  }) {
+    const db = require('./db')
+    const olderMessagesRes = await db.pool.query(
+      'SELECT id,direction,body,created_at FROM messages WHERE session_id=$1 AND to_jid=$2 ORDER BY created_at DESC LIMIT 1000000 OFFSET $3',
+      [sessionId, chatJid, MAX_CONTEXT_MESSAGES]
+    )
+
+    const olderMessages = (olderMessagesRes.rows || []).reverse()
+    if (!olderMessages.length) return ''
+
+    const summaryRowRes = await db.pool.query(
+      'SELECT id,summary_text,source_message_count FROM chat_summaries WHERE session_id=$1 AND chat_jid=$2 LIMIT 1',
+      [sessionId, chatJid]
+    )
+
+    const existing = summaryRowRes.rows && summaryRowRes.rows.length ? summaryRowRes.rows[0] : null
+    if (existing && Number(existing.source_message_count || 0) === olderMessages.length) {
+      return existing.summary_text || ''
+    }
+
+    const transcript = olderMessages
+      .map((message) => `${message.direction === 'out' ? 'Assistant' : 'User'}: ${message.body}`)
+      .join('\n')
+
+    const ai = require('./ai')
+    const summary = await ai.chatCompletion({
+      provider,
+      model,
+      apiKey,
+      baseURL,
+      systemPrompt: [
+        'Summarize the following WhatsApp conversation history for an AI support assistant.',
+        'Capture customer identity cues, preferences, promises made, unresolved issues, important facts, and current conversation state.',
+        'Keep it concise and factual. Do not invent details.',
+      ].join(' '),
+      messages: [{ role: 'user', content: transcript }],
+    })
+
+    const summaryText = String(summary || '').trim()
+    if (!summaryText) return ''
+
+    if (existing) {
+      await db.pool.query(
+        'UPDATE chat_summaries SET summary_text=$1, source_message_count=$2, updated_at=CURRENT_TIMESTAMP WHERE id=$3',
+        [summaryText, olderMessages.length, existing.id]
+      )
+    } else {
+      await db.pool.query(
+        'INSERT INTO chat_summaries(id,session_id,chat_jid,summary_text,source_message_count,created_at,updated_at) VALUES($1,$2,$3,$4,$5,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
+        [uuidv4(), sessionId, chatJid, summaryText, olderMessages.length]
+      )
+    }
+
+    return summaryText
+  }
+
+  async setChatHandoffMode(sessionId, chatJid, mode, note, updatedByUserId = null) {
+    try {
+      const db = require('./db')
+      const existing = await db.pool.query(
+        'SELECT id FROM chat_handoffs WHERE session_id=$1 AND chat_jid=$2 LIMIT 1',
+        [sessionId, chatJid]
+      )
+
+      if (existing.rows && existing.rows.length) {
+        await db.pool.query(
+          'UPDATE chat_handoffs SET mode=$1, note=$2, updated_by_user_id=$3, updated_at=CURRENT_TIMESTAMP WHERE id=$4',
+          [mode, note || '', updatedByUserId, existing.rows[0].id]
+        )
+      } else {
+        await db.pool.query(
+          'INSERT INTO chat_handoffs(id,session_id,chat_jid,mode,note,updated_by_user_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
+          [uuidv4(), sessionId, chatJid, mode, note || '', updatedByUserId]
+        )
+      }
+    } catch (e) {
+      console.error('setChatHandoffMode failed', e && e.message)
+    }
+  }
+
+  async detectAdminEscalation({
+    provider,
+    model,
+    apiKey,
+    baseURL,
+    systemPrompt,
+    chatSummary,
+    conversationMessages,
+    customerJid,
+    adminPhone,
+    latestUserMessage,
+  }) {
+    if (!adminPhone) return { shouldEscalate: false }
+    if (!shouldAttemptEscalation(latestUserMessage)) return { shouldEscalate: false }
+
+    const ai = require('./ai')
+    const detectorPrompt = [
+      'You are an escalation detector for a WhatsApp sales and support agent.',
+      'Decide if this conversation should now be handed to a human admin.',
+      'Be conservative. The default is NOT to escalate.',
+      'Do NOT escalate for ordinary FAQs the AI can answer, including pricing, package details, plan duration, features, comparisons, onboarding, activation steps, and general "how it works" questions.',
+      'Escalate only when the customer clearly asks for a human/admin, asks for the admin number, expresses clear buying intent, needs a callback, is ready for a real manual next step like payment/order confirmation/activation by staff, needs manual approval, or the case is sensitive and should not be handled by AI.',
+      'Return ONLY valid JSON with keys: shouldEscalate, reason, adminMessage, customerNotice.',
+      'adminMessage should be a concise WhatsApp message for the admin with customer phone, reason, and next-step context.',
+      'customerNotice is optional. Leave it empty unless a brief neutral acknowledgment is truly needed.',
+      'Do not mention admin in customerNotice unless the customer explicitly asked for admin or a person.',
+      'If escalation is not needed, return {"shouldEscalate":false,"reason":"","adminMessage":"","customerNotice":""}.',
+    ].join(' ')
+
+    const conversationTranscript = conversationMessages
+      .map((message) => `${message.role === 'assistant' ? 'Assistant' : 'Customer'}: ${message.content}`)
+      .join('\n')
+
+    const detectorInput = [
+      `Customer JID: ${customerJid}`,
+      `Admin phone: ${adminPhone}`,
+      systemPrompt ? `Agent instructions:\n${systemPrompt}` : '',
+      chatSummary ? `Older conversation summary:\n${chatSummary}` : '',
+      `Recent conversation:\n${conversationTranscript}`,
+    ].filter(Boolean).join('\n\n')
+
+    try {
+      const raw = await ai.chatCompletion({
+        provider,
+        model,
+        apiKey,
+        baseURL,
+        systemPrompt: detectorPrompt,
+        messages: [{ role: 'user', content: detectorInput }],
+      })
+
+      const normalized = String(raw || '').trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '')
+      const parsed = JSON.parse(normalized)
+      return {
+        shouldEscalate: !!parsed.shouldEscalate,
+        reason: String(parsed.reason || ''),
+        adminMessage: String(parsed.adminMessage || ''),
+        customerNotice: String(parsed.customerNotice || ''),
+      }
+    } catch (e) {
+      console.error('detectAdminEscalation failed', e && e.message)
+      return { shouldEscalate: false }
+    }
+  }
+
+  async notifyAdminAndPauseThread({
+    sessionId,
+    customerJid,
+    adminPhone,
+    escalation,
+  }) {
+    const s = this.sessions.get(sessionId)
+    if (!s || !s.sock) return false
+
+    const adminJid = normalizePhoneToJid(adminPhone)
+    if (!adminJid) return false
+
+    try {
+      const adminText = escalation.adminMessage || `Admin attention needed for customer ${customerJid.split('@')[0]}. Reason: ${escalation.reason || 'Lead requires human follow-up.'}`
+      await s.sock.sendMessage(adminJid, { text: adminText })
+
+      const db = require('./db')
+      await db.pool.query(
+        'INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)',
+        [uuidv4(), sessionId, 'out', adminJid, adminText, JSON.stringify({ adminEscalation: true, customerJid, reason: escalation.reason || '' })]
+      )
+
+      await this.setChatHandoffMode(sessionId, customerJid, 'human', escalation.reason || 'Auto escalated to admin')
+      return true
+    } catch (e) {
+      console.error('notifyAdminAndPauseThread failed', e && e.message)
+      return false
+    }
+  }
+
+  async buildConversationContext({
+    sessionId,
+    chatJid,
+    provider,
+    model,
+    apiKey,
+    baseURL,
+  }) {
+    const recentMessages = await this.getRecentMessagesForContext(sessionId, chatJid)
+    const summary = await this.getOrCreateChatSummary({
+      sessionId,
+      chatJid,
+      provider,
+      model,
+      apiKey,
+      baseURL,
+    })
+
+    const contextMessages = []
+    for (const message of recentMessages) {
+      if (!message.body) continue
+      contextMessages.push({
+        role: message.direction === 'out' ? 'assistant' : 'user',
+        content: message.body,
+      })
+    }
+
+    return { summary, messages: contextMessages }
   }
 
   initSocketIO(io) {
@@ -430,7 +717,7 @@ class ConnectionManager {
 
         // load agent meta
         const db2 = require('./db')
-        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.provider, m.model, m.api_key, m.base_url, m.excluded_numbers FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1', [currentAgentId])
+        const r = await db2.pool.query('SELECT a.name, a.webhook_url, m.system_prompt, m.provider, m.model, m.api_key, m.base_url, m.excluded_numbers, m.human_handoff_phone FROM agents a LEFT JOIN agents_meta m ON m.agent_id=a.id WHERE a.id=$1', [currentAgentId])
         if (!r.rows || !r.rows.length) return
         const meta = r.rows[0]
         const provider = meta.provider || 'openai'
@@ -439,6 +726,7 @@ class ConnectionManager {
         const apiKey = meta.api_key || null
         const baseURL = meta.base_url || null
         const excludedNumbers = meta.excluded_numbers || ''
+        const humanHandoffPhone = meta.human_handoff_phone || ''
 
         try {
           const memory = await db2.pool.query('SELECT question,answer FROM agent_memory WHERE agent_id=$1 ORDER BY created_at ASC', [currentAgentId])
@@ -477,19 +765,51 @@ class ConnectionManager {
           await sock.sendPresenceUpdate('composing', msg.key.remoteJid)
 
           const ai = require('./ai')
-          const reply = await ai.chatCompletion({ provider, model, systemPrompt, messages: [{ role: 'user', content: text }], apiKey, baseURL })
+          const conversationContext = await this.buildConversationContext({
+            sessionId: id,
+            chatJid: msg.key.remoteJid,
+            provider,
+            model,
+            apiKey,
+            baseURL,
+          })
+          const contextualSystemPrompt = conversationContext.summary
+            ? `${systemPrompt}\n\n## Conversation Summary Before Recent Messages\n${conversationContext.summary}`.trim()
+            : systemPrompt
+          const reply = await ai.chatCompletion({
+            provider,
+            model,
+            systemPrompt: contextualSystemPrompt,
+            messages: conversationContext.messages,
+            apiKey,
+            baseURL,
+          })
+
+          const escalation = await this.detectAdminEscalation({
+            provider,
+            model,
+            apiKey,
+            baseURL,
+            systemPrompt: contextualSystemPrompt,
+            chatSummary: conversationContext.summary,
+            conversationMessages: conversationContext.messages,
+            customerJid: msg.key.remoteJid,
+            adminPhone: humanHandoffPhone,
+            latestUserMessage: text,
+          })
+
+          const customerReply = reply || (escalation.shouldEscalate ? (escalation.customerNotice || 'Thanks, noted.') : '')
 
           // stop typing status
           await sock.sendPresenceUpdate('paused', msg.key.remoteJid)
 
-          if (reply) {
-            await sock.sendMessage(msg.key.remoteJid, { text: reply })
+          if (customerReply) {
+            await sock.sendMessage(msg.key.remoteJid, { text: customerReply })
             try {
               const db3 = require('./db')
               const mid2 = require('uuid').v4()
-              await db3.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid2, id, 'out', msg.key.remoteJid, reply, JSON.stringify({ reply })])
+              await db3.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid2, id, 'out', msg.key.remoteJid, customerReply, JSON.stringify({ reply: customerReply, escalationCustomerNotice: escalation.shouldEscalate })])
 
-              // Increment usage here for the outgoing AI reply
               try {
                 await userService.incrementUsage(userId, 'messages')
               } catch (err) {
@@ -497,6 +817,15 @@ class ConnectionManager {
               }
 
             } catch (e) { console.error('persist outgoing failed', e && e.message) }
+          }
+
+          if (escalation.shouldEscalate) {
+            await this.notifyAdminAndPauseThread({
+              sessionId: id,
+              customerJid: msg.key.remoteJid,
+              adminPhone: humanHandoffPhone,
+              escalation,
+            })
           }
         } catch (e) {
           console.error('ai call failed', {
@@ -602,6 +931,19 @@ class ConnectionManager {
     } catch (e) {
       console.error('getMessages failed', e)
       return []
+    }
+  }
+
+  async clearChat(sessionId, chatId) {
+    try {
+      const db = require('./db')
+      await db.pool.query('DELETE FROM messages WHERE session_id=$1 AND to_jid=$2', [sessionId, chatId])
+      await db.pool.query('DELETE FROM chat_summaries WHERE session_id=$1 AND chat_jid=$2', [sessionId, chatId])
+      await db.pool.query('DELETE FROM chat_handoffs WHERE session_id=$1 AND chat_jid=$2', [sessionId, chatId])
+      return true
+    } catch (e) {
+      console.error('clearChat failed', e && e.message)
+      throw e
     }
   }
 

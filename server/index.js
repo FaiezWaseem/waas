@@ -356,6 +356,21 @@ app.patch('/sessions/:id/chats/:chatId/control', auth.verifyToken, async (req, r
   }
 })
 
+app.delete('/sessions/:id/chats/:chatId/messages', auth.verifyToken, async (req, res) => {
+  try {
+    const { id, chatId } = req.params
+    const r = await db.pool.query('SELECT user_id FROM sessions WHERE id=$1', [id])
+    if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'not found' })
+    if (r.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    await manager.clearChat(id, chatId)
+    res.json({ ok: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // send message manually - authenticated
 app.post('/sessions/:id/chats/:chatId/messages', auth.verifyToken, async (req, res) => {
   try {
