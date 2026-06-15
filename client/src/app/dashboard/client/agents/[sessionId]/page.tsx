@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { io } from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -97,6 +97,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export default function SessionDetailsPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -198,6 +199,19 @@ export default function SessionDetailsPage() {
       window.localStorage.removeItem("waas:selectedPromptTemplate");
     }
   }, [sessionId]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    const chatId = searchParams.get("chatId");
+
+    if (tab === "chats") {
+      setActiveTab("chats");
+    }
+
+    if (chatId) {
+      setSelectedChatId(chatId);
+    }
+  }, [searchParams]);
 
   async function loadSession() {
     try {

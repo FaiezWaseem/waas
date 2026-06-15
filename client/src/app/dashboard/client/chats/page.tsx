@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Search, User } from "lucide-react";
 import api from "@/lib/api";
 
@@ -31,6 +32,7 @@ function timeAgo(dateString: string) {
 }
 
 export default function ChatsPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,6 +92,7 @@ export default function ChatsPage() {
             filteredChats.map((chat) => (
               <div
                 key={chat.id}
+                onClick={() => router.push(`/dashboard/client/agents/${chat.sessionId}?tab=chats&chatId=${encodeURIComponent(chat.phone)}@s.whatsapp.net`)}
                 className="flex items-center justify-between p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer transition-colors"
               >
                 <div className="flex items-center gap-4">
