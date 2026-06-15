@@ -289,6 +289,20 @@ if (DB_TYPE === 'mysql') {
       FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS chat_handoffs (
+      id VARCHAR(36) PRIMARY KEY,
+      session_id VARCHAR(36) NOT NULL,
+      chat_jid VARCHAR(255) NOT NULL,
+      mode VARCHAR(20) NOT NULL DEFAULT 'ai',
+      note TEXT,
+      updated_by_user_id VARCHAR(36),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_session_chat_handoff (session_id, chat_jid),
+      FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY(updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
     CREATE TABLE IF NOT EXISTS campaigns (
       id VARCHAR(36) PRIMARY KEY,
       user_id VARCHAR(36) NOT NULL,
@@ -580,6 +594,20 @@ if (DB_TYPE === 'mysql') {
         extracted_text TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(agent_id) REFERENCES agents(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS chat_handoffs (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        chat_jid TEXT NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'ai',
+        note TEXT,
+        updated_by_user_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(session_id, chat_jid),
+        FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY(updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
       );
 
       CREATE TABLE IF NOT EXISTS campaigns (

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Menu, Bell } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -20,6 +21,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         <span className="text-zinc-900 dark:text-zinc-100">WaaS</span>
       </div>
       <div className="ml-auto flex items-center gap-4">
+        <ThemeToggle className="px-2.5 py-2" />
         <button className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
             <Bell className="h-5 w-5" />
         </button>

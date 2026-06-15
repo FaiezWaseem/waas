@@ -299,6 +299,63 @@ app.get('/sessions/:id/chats/:chatId/messages', auth.verifyToken, async (req, re
   }
 })
 
+app.get('/sessions/:id/chats/:chatId/control', auth.verifyToken, async (req, res) => {
+  try {
+    const { id, chatId } = req.params
+    const r = await db.pool.query('SELECT user_id FROM sessions WHERE id=$1', [id])
+    if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'not found' })
+    if (r.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    const control = await db.pool.query(
+      'SELECT mode, note, updated_at FROM chat_handoffs WHERE session_id=$1 AND chat_jid=$2 LIMIT 1',
+      [id, chatId]
+    )
+
+    res.json({
+      control: control.rows && control.rows.length
+        ? control.rows[0]
+        : { mode: 'ai', note: '', updated_at: null }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+app.patch('/sessions/:id/chats/:chatId/control', auth.verifyToken, async (req, res) => {
+  try {
+    const { id, chatId } = req.params
+    const { mode, note } = req.body
+    if (mode !== 'ai' && mode !== 'human') return res.status(400).json({ error: 'mode must be ai or human' })
+
+    const r = await db.pool.query('SELECT user_id FROM sessions WHERE id=$1', [id])
+    if (!r.rows || !r.rows.length) return res.status(404).json({ error: 'not found' })
+    if (r.rows[0].user_id !== req.user.sub) return res.status(403).json({ error: 'forbidden' })
+
+    const existing = await db.pool.query(
+      'SELECT id FROM chat_handoffs WHERE session_id=$1 AND chat_jid=$2 LIMIT 1',
+      [id, chatId]
+    )
+
+    if (existing.rows && existing.rows.length) {
+      await db.pool.query(
+        'UPDATE chat_handoffs SET mode=$1, note=$2, updated_by_user_id=$3, updated_at=CURRENT_TIMESTAMP WHERE id=$4',
+        [mode, note || '', req.user.sub, existing.rows[0].id]
+      )
+    } else {
+      await db.pool.query(
+        'INSERT INTO chat_handoffs(id,session_id,chat_jid,mode,note,updated_by_user_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)',
+        [require('uuid').v4(), id, chatId, mode, note || '', req.user.sub]
+      )
+    }
+
+    res.json({ ok: true, control: { mode, note: note || '' } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // send message manually - authenticated
 app.post('/sessions/:id/chats/:chatId/messages', auth.verifyToken, async (req, res) => {
   try {

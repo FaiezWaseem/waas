@@ -74,6 +74,20 @@ class ConnectionManager {
     this.io = null
   }
 
+  async getChatHandoff(sessionId, chatJid) {
+    try {
+      const db = require('./db')
+      const result = await db.pool.query(
+        'SELECT mode, note, updated_at FROM chat_handoffs WHERE session_id=$1 AND chat_jid=$2 LIMIT 1',
+        [sessionId, chatJid]
+      )
+      return result.rows && result.rows.length ? result.rows[0] : null
+    } catch (e) {
+      console.error('getChatHandoff failed', e && e.message)
+      return null
+    }
+  }
+
   initSocketIO(io) {
     this.io = io
     this.io.on('connection', (socket) => {
@@ -361,6 +375,12 @@ class ConnectionManager {
 
         if (!currentAgentId) return
 
+        const handoff = await this.getChatHandoff(id, msg.key.remoteJid)
+        if (handoff && handoff.mode === 'human') {
+          console.log(`Session ${id} chat ${msg.key.remoteJid} is in human handoff mode. Skipping AI reply.`)
+          return
+        }
+
         // enforce plan usage and track usage
         try {
           const sub = await userService.getUserPlan(userId)
@@ -528,7 +548,16 @@ class ConnectionManager {
       // Simplified: Just get the last message. Unread count requires "read" status which we might not track perfectly yet.
 
       const simplifiedSql = `
-        SELECT m.to_jid, m.body, m.created_at, m.direction, m.to_jid as id, m.to_jid as name
+        SELECT
+          m.to_jid,
+          m.body,
+          m.created_at,
+          m.direction,
+          m.to_jid as id,
+          m.to_jid as name,
+          COALESCE(h.mode, 'ai') as handoff_mode,
+          h.note as handoff_note,
+          h.updated_at as handoff_updated_at
         FROM messages m
         INNER JOIN (
             SELECT to_jid, MAX(created_at) as max_created
@@ -536,6 +565,7 @@ class ConnectionManager {
             WHERE session_id = $1
             GROUP BY to_jid
         ) grouped_m ON m.to_jid = grouped_m.to_jid AND m.created_at = grouped_m.max_created
+        LEFT JOIN chat_handoffs h ON h.session_id = m.session_id AND h.chat_jid = m.to_jid
         WHERE m.session_id = $1
         ORDER BY m.created_at DESC
       `
@@ -547,7 +577,10 @@ class ConnectionManager {
         lastMessage: r.body,
         time: r.created_at,
         unreadCount: 0, // TODO: implement read tracking
-        status: 'offline' // TODO: implement presence
+        status: 'offline', // TODO: implement presence
+        handoffMode: r.handoff_mode || 'ai',
+        handoffNote: r.handoff_note || '',
+        handoffUpdatedAt: r.handoff_updated_at || null,
       }))
     } catch (e) {
       console.error('getChats failed', e)

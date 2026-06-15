@@ -17,7 +17,17 @@ import api from "@/lib/api";
 type ProviderId = "openai" | "claude" | "gemini" | "deepseek" | "openai_compatible";
 type TabId = "overview" | "agent" | "chats";
 
-type ChatItem = { id: string; name: string; lastMessage: string; time: string; unreadCount: number; status: string };
+type ChatItem = {
+  id: string;
+  name: string;
+  lastMessage: string;
+  time: string;
+  unreadCount: number;
+  status: string;
+  handoffMode?: "ai" | "human";
+  handoffNote?: string;
+  handoffUpdatedAt?: string | null;
+};
 type MessageItem = { id: string; text: string; sender: "me" | "them"; time: string; status: string };
 type MemoryItem = { id: string; question: string; answer: string; created_at: string };
 type DocumentItem = { id: string; file_name: string; file_url: string; file_type: string; created_at: string };
@@ -119,6 +129,7 @@ export default function SessionDetailsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isUpdatingHandoff, setIsUpdatingHandoff] = useState(false);
 
   const provider = useMemo(() => providers.find((item) => item.id === session.config.provider) || providers[0], [session.config.provider]);
 
@@ -127,6 +138,7 @@ export default function SessionDetailsPage() {
     void loadChats();
     const timer = setInterval(() => void loadChats(), 10000);
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   useEffect(() => {
@@ -148,10 +160,19 @@ export default function SessionDetailsPage() {
     return () => {
       socket.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   useEffect(() => {
     if (selectedChatId) void loadMessages(selectedChatId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChatId]);
+
+  useEffect(() => {
+    if (!selectedChatId) return;
+    const timer = setInterval(() => void loadMessages(selectedChatId), 5000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChatId]);
 
   useEffect(() => {
@@ -244,7 +265,7 @@ export default function SessionDetailsPage() {
 
   async function loadMessages(chatId: string) {
     try {
-      const res = await api.get(`/sessions/${sessionId}/chats/${chatId}/messages`);
+      const res = await api.get(`/sessions/${sessionId}/chats/${encodeURIComponent(chatId)}/messages`);
       setMessages(res.data.messages || []);
     } catch (error) {
       console.error("Failed to fetch messages", error);
@@ -464,6 +485,42 @@ export default function SessionDetailsPage() {
     }
   }
 
+  async function updateChatHandoff(mode: "ai" | "human") {
+    if (!selectedChatId) return;
+    setIsUpdatingHandoff(true);
+    try {
+      const note = mode === "human"
+        ? "Human takeover enabled from dashboard."
+        : "Returned to AI from dashboard.";
+
+      await api.patch(`/sessions/${sessionId}/chats/${encodeURIComponent(selectedChatId)}/control`, {
+        mode,
+        note,
+      });
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === selectedChatId
+            ? {
+                ...chat,
+                handoffMode: mode,
+                handoffNote: note,
+                handoffUpdatedAt: new Date().toISOString(),
+              }
+            : chat
+        )
+      );
+
+      toast.success(mode === "human" ? "Human takeover enabled" : "Chat returned to AI");
+      await loadChats();
+    } catch (error) {
+      console.error("Failed to update chat handoff", error);
+      toast.error("Failed to update handoff mode");
+    } finally {
+      setIsUpdatingHandoff(false);
+    }
+  }
+
   function uptime(input: string) {
     if (!input || input === "-") return "-";
     const start = new Date(input);
@@ -474,6 +531,7 @@ export default function SessionDetailsPage() {
   }
 
   const selectedChat = chats.find((item) => item.id === selectedChatId) || null;
+  const selectedChatMode = selectedChat?.handoffMode || "ai";
   const excludedItems = getExcludedItems();
   const isDisconnected = session.status === "init";
   const isWaitingForScan = session.status === "connecting" && !session.phoneNumber;
@@ -760,7 +818,7 @@ export default function SessionDetailsPage() {
                     <div key={chat.id} onClick={() => setSelectedChatId(chat.id)} className={`cursor-pointer p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 ${selectedChatId === chat.id ? "bg-zinc-100 dark:bg-zinc-800" : ""}`}>
                       <div className="flex items-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-lg font-medium text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">{(chat.name || chat.id).charAt(0)}</div>
-                        <div className="min-w-0 flex-1"><div className="mb-1 flex items-center justify-between"><h4 className="truncate font-medium text-zinc-900 dark:text-zinc-100">{chat.name || chat.id}</h4><span className="text-xs text-zinc-500">{new Date(chat.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div><div className="flex items-center justify-between"><p className="truncate text-sm text-zinc-500">{chat.lastMessage}</p>{chat.unreadCount > 0 && <span className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-[10px] font-medium text-white">{chat.unreadCount}</span>}</div></div>
+                        <div className="min-w-0 flex-1"><div className="mb-1 flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><h4 className="truncate font-medium text-zinc-900 dark:text-zinc-100">{chat.name || chat.id}</h4>{chat.handoffMode === "human" && <span className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Human</span>}</div><span className="text-xs text-zinc-500">{new Date(chat.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div><div className="flex items-center justify-between"><p className="truncate text-sm text-zinc-500">{chat.lastMessage}</p>{chat.unreadCount > 0 && <span className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-[10px] font-medium text-white">{chat.unreadCount}</span>}</div></div>
                       </div>
                     </div>
                   ))}
@@ -771,7 +829,25 @@ export default function SessionDetailsPage() {
                   <>
                     <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
                       <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 font-medium text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">{selectedChat?.name?.charAt(0) || "?"}</div><div><h3 className="font-medium text-zinc-900 dark:text-zinc-100">{selectedChat?.name || selectedChatId}</h3><p className="text-xs text-zinc-500">{selectedChat?.status === "online" ? "online" : "last seen recently"}</p></div></div>
-                      <div className="flex items-center gap-4 text-zinc-500"><Search className="h-5 w-5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300" /><MoreVertical className="h-5 w-5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300" /></div>
+                      <div className="flex items-center gap-3">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${selectedChatMode === "human" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"}`}>
+                          {selectedChatMode === "human" ? "Human takeover" : "AI active"}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={isUpdatingHandoff}
+                          onClick={() => void updateChatHandoff(selectedChatMode === "human" ? "ai" : "human")}
+                          className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${selectedChatMode === "human" ? "bg-indigo-600 text-white hover:bg-indigo-700" : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"} disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          {isUpdatingHandoff ? "Updating..." : selectedChatMode === "human" ? "Return to AI" : "Take over"}
+                        </button>
+                        <div className="flex items-center gap-4 text-zinc-500"><Search className="h-5 w-5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300" /><MoreVertical className="h-5 w-5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300" /></div>
+                      </div>
+                    </div>
+                    <div className={`border-b px-4 py-3 text-sm ${selectedChatMode === "human" ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200" : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"}`}>
+                      {selectedChatMode === "human"
+                        ? "AI replies are paused for this chat. A human can review and respond manually until you return the conversation to AI."
+                        : "AI can reply automatically in this chat when session auto replies are enabled."}
                     </div>
                     <div className="flex-1 overflow-y-auto p-4" style={{ backgroundImage: "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')", backgroundRepeat: "repeat", backgroundSize: "400px" }}>
                       <div className="space-y-4">
