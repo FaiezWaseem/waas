@@ -121,9 +121,11 @@ server/
     ├── payment_methods.js
     ├── api_keys.js
     ├── v1_api.js            # Public developer API (`/v1`)
+    ├── webhooks.js          # Webhook CRUD + signed async delivery
+    ├── webhooks_routes.js   # JWT webhook routes for dashboard
     ├── middleware/api_auth.js
     ├── userService.js       # Plans, usage, limits
-    ├── alerts.js            # Webhook notifications
+    ├── alerts.js            # Quota alert notification hooks
     ├── blog.js
     ├── cron.js              # Subscription roll + campaign worker
     └── seed.js
@@ -147,7 +149,8 @@ server/
 | `/payment-methods` | JWT | `payment_methods.js` |
 | `/api-keys` | JWT | `api_keys.js` |
 | `/admin/*` | JWT + admin | `admin.js` + plans in `index.js` |
-| `/v1/*` | API key | `v1_api.js` |
+| `/v1/*` | API key | `v1_api.js` (messages, sessions, agents, AI, webhooks, campaigns) |
+| `/webhooks` | JWT | `webhooks_routes.js` (dashboard webhook CRUD) |
 | `GET /uploads/*` | Static | multer files |
 
 Default port: **4000** (falls through to next free port if busy).
@@ -161,8 +164,9 @@ Default port: **4000** (falls through to next free port if busy).
 | `ai.js` | OpenAI, Claude, Gemini, DeepSeek, OpenAI-compatible endpoints |
 | `campaigns.js` | Campaigns, contacts, rate-limited send runner |
 | `userService.js` | Plan resolution and usage counters (messages, chats, sessions) |
+| `webhooks.js` | User webhooks for `message.incoming`, session QR/status, HMAC delivery |
 | `cron.js` | Hourly subscription period roll; campaign processing interval from `CAMPAIGN_RECIPIENTS_PER_HOUR` |
-| `db.js` | Schema for users, agents, sessions, messages, plans, subscriptions, usage, campaigns, handoffs, summaries, API keys, etc. |
+| `db.js` | Schema for users, agents, sessions, messages, plans, subscriptions, usage, campaigns, handoffs, summaries, API keys, webhooks, etc. |
 
 ### Runtime data on disk
 

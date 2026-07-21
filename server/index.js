@@ -137,6 +137,9 @@ app.use('/subscriptions', auth.verifyToken, require('./src/subscriptions'))
 app.use('/payment-methods', auth.verifyToken, require('./src/payment_methods'))
 app.use('/api-keys', auth.verifyToken, require('./src/api_keys'))
 
+// Dashboard webhook management (JWT)
+app.use('/webhooks', auth.verifyToken, require('./src/webhooks_routes'))
+
 // Developer API v1
 const { verifyApiKey } = require('./src/middleware/api_auth')
 app.use('/v1', verifyApiKey, require('./src/v1_api'))

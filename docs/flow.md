@@ -300,13 +300,54 @@ Client  Authorization: Bearer <api_key>
      → middleware hashes key (sha256), loads user
      → attaches req.user.sub, plan limit, current usage
      → routes in v1_api.js
+```
 
-Typical: POST /v1/messages
+### Sessions & AI (API connect flow)
+
+```
+POST /v1/sessions  { agent_id?, ai_enabled? }
+  → create Baileys session
+  → GET /v1/sessions/:id  (poll for qr / status)
+  → or subscribe to webhooks: session.qr, session.status
+
+PATCH /v1/sessions/:id
+PATCH /v1/sessions/:id/ai
+  → agent_id, ai_enabled
+  → optional agent prompt/provider/model updates
+
+POST /v1/agents
+PATCH /v1/agents/:id
+POST /v1/agents/:id/bind-session
+```
+
+### Messaging
+
+```
+POST /v1/messages
   { session_id, to, type, text | url, template_id?, variables? }
   → ownership of session
   → send via ConnectionManager
   → increment message usage
+  → optional message.outgoing webhook
 ```
+
+### Real-time webhooks
+
+```
+POST /v1/webhooks  { url, secret?, events[] }
+  events: message.incoming | message.outgoing | session.status | session.qr
+
+On WhatsApp inbound:
+  persist message
+  → dispatch message.incoming to matching webhooks (async)
+  → if agent.webhook_url set, also POST there
+  → then built-in AI path (if ai_enabled and agent bound)
+
+Payload headers:
+  X-WaaS-Event, X-WaaS-Delivery, X-WaaS-Signature (sha256 HMAC when secret set)
+```
+
+Dashboard JWT also manages hooks at `/webhooks` (Developers UI).
 
 API keys are created/managed under the client **Developers** page (`/api-keys`).
 

@@ -390,7 +390,11 @@ class ConnectionManager {
     // enforce session quota if userId provided
     if (userId) {
       const ok = await reserveSessionSlot(userId)
-      if (!ok) return console.warn('session limit reached for your plan')
+      if (!ok) {
+        const err = new Error('session limit reached for your plan')
+        err.code = 'SESSION_LIMIT'
+        throw err
+      }
     }
 
 
@@ -612,6 +616,14 @@ class ConnectionManager {
         if (this.io) {
           this.io.to(`session:${id}`).emit('status', { sessionId: id, status: connection })
         }
+        try {
+          const webhooks = require('./webhooks')
+          webhooks.dispatch(userId, 'session.status', {
+            session_id: id,
+            status: connection,
+            agent_id: agentId || null,
+          }).catch(() => {})
+        } catch (_e) {}
       }
       if (qr) {
         const db = require('./db')
@@ -619,6 +631,14 @@ class ConnectionManager {
         if (this.io) {
           this.io.to(`session:${id}`).emit('qr', { sessionId: id, qr })
         }
+        try {
+          const webhooks = require('./webhooks')
+          webhooks.dispatch(userId, 'session.qr', {
+            session_id: id,
+            qr,
+            status: s.status || 'connecting',
+          }).catch(() => {})
+        } catch (_e) {}
       }
     })
 
@@ -639,26 +659,52 @@ class ConnectionManager {
         console.log('incoming text for session', id, 'from', msg.key.remoteJid, ':', text)
 
         // persist incoming message
+        let messageId = null
         try {
           const db = require('./db')
-          const mid = require('uuid').v4()
-          await db.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid, id, 'in', msg.key.remoteJid, text, JSON.stringify(msg)])
+          messageId = require('uuid').v4()
+          await db.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [messageId, id, 'in', msg.key.remoteJid, text, JSON.stringify(msg)])
         } catch (e) { console.error('persist message failed', e && e.message) }
 
         // find bound agent for this session
         // use passed agentId or fetch fresh from DB/memory
         const s = this.sessions.get(id) || {}
 
-        // CHECK AI ENABLED STATUS
-        if (s.aiEnabled === false) {
-          console.log(`Session ${id} AI disabled. Ignoring message.`)
-          return
-        }
-
         // prioritize s.agentId (which tracks live updates) over the closure variable agentId
         // check if s.agentId is explicitly set (even to null)
         let currentAgentId = s.agentId
         if (currentAgentId === undefined) currentAgentId = agentId
+
+        // Real-time incoming message webhooks (fire even when AI is disabled)
+        let agentWebhookUrl = null
+        try {
+          if (currentAgentId) {
+            const dbAgent = require('./db')
+            const agentRow = await dbAgent.pool.query('SELECT webhook_url FROM agents WHERE id=$1', [currentAgentId])
+            if (agentRow.rows && agentRow.rows.length) agentWebhookUrl = agentRow.rows[0].webhook_url || null
+          }
+          const webhooks = require('./webhooks')
+          webhooks.dispatch(userId, 'message.incoming', {
+            message_id: messageId,
+            session_id: id,
+            agent_id: currentAgentId || null,
+            ai_enabled: s.aiEnabled !== false,
+            from: msg.key.remoteJid,
+            from_phone: String(msg.key.remoteJid || '').split('@')[0],
+            text,
+            direction: 'in',
+            push_name: msg.pushName || null,
+            timestamp: msg.messageTimestamp || null,
+          }, { agentWebhookUrl }).catch(() => {})
+        } catch (e) {
+          console.error('incoming webhook dispatch failed', e && e.message)
+        }
+
+        // CHECK AI ENABLED STATUS
+        if (s.aiEnabled === false) {
+          console.log(`Session ${id} AI disabled. Ignoring message for AI (webhooks already sent).`)
+          return
+        }
 
         if (!currentAgentId) return
 
@@ -815,6 +861,20 @@ class ConnectionManager {
               } catch (err) {
                 console.error(`[AI Usage] Failed to increment usage for user ${userId}:`, err)
               }
+
+              try {
+                const webhooks = require('./webhooks')
+                webhooks.dispatch(userId, 'message.outgoing', {
+                  message_id: mid2,
+                  session_id: id,
+                  agent_id: currentAgentId || null,
+                  to: msg.key.remoteJid,
+                  to_phone: String(msg.key.remoteJid || '').split('@')[0],
+                  text: customerReply,
+                  direction: 'out',
+                  source: 'ai',
+                }).catch(() => {})
+              } catch (_e) {}
 
             } catch (e) { console.error('persist outgoing failed', e && e.message) }
           }
@@ -974,6 +1034,23 @@ class ConnectionManager {
       const db = require('./db')
       const mid = require('uuid').v4()
       await db.pool.query('INSERT INTO messages(id,session_id,direction,to_jid,body,raw) VALUES($1,$2,$3,$4,$5,$6)', [mid, sessionId, 'out', toJid, bodyText, JSON.stringify(msgPayload)])
+
+      try {
+        const webhooks = require('./webhooks')
+        if (s.userId) {
+          webhooks.dispatch(s.userId, 'message.outgoing', {
+            message_id: mid,
+            session_id: sessionId,
+            agent_id: s.agentId || null,
+            to: toJid,
+            to_phone: String(toJid || '').split('@')[0],
+            text: bodyText,
+            direction: 'out',
+            source: 'api_or_manual',
+          }).catch(() => {})
+        }
+      } catch (_e) {}
+
       return { id: mid, text: bodyText, sender: 'me', time: new Date().toISOString(), status: 'sent' }
     } catch (e) {
       console.error('persist outgoing manual message failed', e)
